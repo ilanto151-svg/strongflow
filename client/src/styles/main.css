@@ -1,0 +1,696 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue:#1d4ed8; --blue-l:#3b82f6; --blue-bg:#eff6ff;
+  --green:#059669; --green-l:#10b981; --green-bg:#f0fdf4;
+  --amber:#d97706; --amber-l:#f59e0b; --amber-bg:#fffbeb;
+  --red:#dc2626; --red-l:#ef4444; --red-bg:#fef2f2;
+  --purple:#7c3aed; --purple-l:#8b5cf6;
+  --gray-50:#f8fafc; --gray-100:#f1f5f9; --gray-200:#e2e8f0;
+  --gray-300:#cbd5e1; --gray-400:#94a3b8; --gray-500:#64748b;
+  --gray-600:#475569; --gray-700:#334155; --gray-900:#0f172a;
+  --radius:12px; --shadow:0 1px 4px rgba(0,0,0,.06);
+  --font:'Segoe UI','Helvetica Neue',sans-serif;
+}
+body{font-family:var(--font);background:#f0f4f8;color:var(--gray-900)}
+.hidden{display:none!important}
+button{font-family:var(--font);cursor:pointer}
+input,textarea,select{font-family:var(--font)}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .2s;padding:10px 18px}
+.btn:hover{opacity:.88}
+.btn-primary{background:linear-gradient(135deg,var(--blue-l),var(--blue));color:#fff;box-shadow:0 6px 16px rgba(59,130,246,.3)}
+.btn-success{background:linear-gradient(135deg,var(--green-l),var(--green));color:#fff;box-shadow:0 6px 16px rgba(16,185,129,.3);width:100%;padding:14px;font-size:15px;font-weight:700}
+.btn-ghost{background:var(--gray-100);color:var(--gray-500);border:none;padding:8px 14px;border-radius:8px;font-size:13px}
+.btn-ghost:hover{background:var(--gray-200)}
+.btn-sm{padding:6px 12px;font-size:12px;border-radius:8px}
+.btn-danger{background:var(--red-bg);color:var(--red);border:1px solid #fecaca}
+.btn-amber{background:var(--amber-bg);color:var(--amber);border:1px solid #fde68a}
+
+/* Inputs */
+.input{width:100%;padding:10px 12px;border:1px solid var(--gray-200);border-radius:8px;font-size:14px;outline:none;transition:border-color .2s;background:#fff}
+.input:focus{border-color:var(--blue-l)}
+textarea.input{resize:vertical}
+.field-label{display:block;font-size:12px;font-weight:600;color:var(--gray-500);letter-spacing:.5px;text-transform:uppercase;margin-bottom:5px}
+
+/* Card / Badge */
+.card{background:#fff;border-radius:14px;border:1px solid var(--gray-200);box-shadow:var(--shadow)}
+.badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:600;text-transform:capitalize}
+
+/* Splash */
+#screen-login{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f1724 0%,#1a2744 50%,#0f2035 100%);position:relative;overflow:hidden}
+#screen-login::before{content:'';position:absolute;top:-150px;right:-150px;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(59,130,246,.15) 0%,transparent 70%)}
+#screen-login::after{content:'';position:absolute;bottom:-100px;left:-100px;width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(16,185,129,.1) 0%,transparent 70%)}
+.splash-card{background:rgba(255,255,255,.04);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.1);border-radius:24px;padding:48px;width:500px;max-width:95vw;box-shadow:0 40px 80px rgba(0,0,0,.5);position:relative;z-index:1;display:flex;flex-direction:column;gap:24px}
+.splash-logo{width:120px;height:120px;border-radius:24px;margin:0 auto 14px;object-fit:cover;box-shadow:0 8px 24px rgba(59,130,246,.4)}
+.splash-logo-fallback{background:linear-gradient(135deg,var(--blue-l),var(--green-l));align-items:center;justify-content:center;font-size:32px}
+.splash-title{color:#fff;font-size:26px;font-weight:700;letter-spacing:-.5px;text-align:center}
+.splash-sub{color:rgba(255,255,255,.5);font-size:14px;text-align:center}
+.splash-prompt{color:rgba(255,255,255,.7);font-size:15px;font-weight:500;text-align:center;margin-bottom:16px}
+.role-card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px 22px;cursor:pointer;display:flex;align-items:center;gap:16px;transition:all .2s;text-align:left;width:100%;margin-bottom:10px}
+.role-card:last-child{margin-bottom:0}
+.role-card:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.28);transform:translateY(-2px)}
+.role-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.role-icon.t{background:linear-gradient(135deg,var(--blue-l),var(--blue));box-shadow:0 6px 18px rgba(59,130,246,.4)}
+.role-icon.p{background:linear-gradient(135deg,var(--green-l),var(--green));box-shadow:0 6px 18px rgba(16,185,129,.4)}
+.role-title{color:#fff;font-size:16px;font-weight:700;margin-bottom:3px}
+.role-desc{color:rgba(255,255,255,.5);font-size:13px;line-height:1.4}
+.pick-box{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:16px 20px}
+.pick-label{color:rgba(255,255,255,.45);font-size:11px;letter-spacing:.6px;text-transform:uppercase;margin-bottom:10px}
+.pick-btn{width:100%;display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;cursor:pointer;margin-bottom:8px;text-align:left;transition:all .15s}
+.pick-btn:last-child{margin-bottom:0}
+.pick-btn:hover{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25)}
+.pick-avatar{width:36px;height:36px;border-radius:50%;background:var(--green-l);display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:700;flex-shrink:0}
+.pick-name{color:#fff;font-size:14px;font-weight:600}
+.pick-diag{color:rgba(255,255,255,.45);font-size:12px}
+.back-btn{background:none;border:none;color:rgba(255,255,255,.45);font-size:13px;cursor:pointer;margin-top:14px;display:flex;align-items:center;gap:5px}
+.back-btn:hover{color:rgba(255,255,255,.8)}
+
+/* Topbar */
+.topbar{background:#fff;border-bottom:1px solid var(--gray-200);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:64px;position:sticky;top:0;z-index:200;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.topbar-logo{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px}
+/* Editable therapist name */
+.t-name-wrap{display:flex;align-items:center;gap:6px}
+.t-name-edit-btn{background:none;border:none;color:var(--gray-400);font-size:13px;padding:2px 5px;border-radius:5px;cursor:pointer;opacity:0;transition:opacity .15s}
+.t-name-wrap:hover .t-name-edit-btn{opacity:1}
+.t-name-input{font-size:14px;font-weight:600;border:1px solid var(--blue-l);border-radius:6px;padding:3px 8px;outline:none;width:180px}
+
+/* Therapist layout */
+.t-layout{display:flex;height:calc(100vh - 64px)}
+.sidebar{width:256px;background:#fff;border-right:1px solid var(--gray-200);padding:20px 14px;overflow-y:auto;flex-shrink:0}
+.sidebar-label{font-size:11px;color:var(--gray-400);letter-spacing:1px;text-transform:uppercase;margin:0 0 10px 8px}
+.nav-btn{width:100%;padding:10px 12px;border-radius:8px;border:none;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;background:transparent;color:var(--gray-500);font-size:14px;margin-bottom:2px;transition:all .15s}
+.nav-btn:hover{background:var(--gray-50)}
+.nav-btn.active{background:var(--blue-bg);color:var(--blue);font-weight:600}
+.patient-btn{width:100%;padding:10px 12px;border-radius:10px;border:none;cursor:pointer;text-align:left;background:transparent;margin-bottom:4px;transition:background .15s;display:flex;align-items:center;gap:10px}
+.patient-btn:hover{background:var(--gray-50)}
+.patient-btn.active{background:var(--blue-bg)}
+.p-avatar{width:36px;height:36px;border-radius:50%;background:var(--gray-200);display:flex;align-items:center;justify-content:center;color:var(--gray-500);font-size:12px;font-weight:700;flex-shrink:0;transition:background .2s}
+.patient-btn.active .p-avatar{background:var(--blue-l);color:#fff}
+.p-name{font-size:14px;font-weight:600;color:var(--gray-900)}
+.patient-btn.active .p-name{color:var(--blue)}
+.p-diag{font-size:11px;color:var(--gray-400)}
+.main-content{flex:1;overflow-y:auto;padding:28px 32px}
+
+/* Patient hero */
+.p-hero{background:linear-gradient(135deg,#1e3a5f,var(--blue));border-radius:16px;padding:22px 28px;margin-bottom:24px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+
+/* Day tabs */
+.day-tab{padding:8px 14px;border-radius:20px;border:none;cursor:pointer;background:#fff;color:var(--gray-600);font-size:13px;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:all .2s;position:relative}
+.day-tab.active{background:var(--blue);color:#fff;font-weight:600;box-shadow:0 4px 12px rgba(29,78,216,.3)}
+.rdot{position:absolute;top:3px;right:3px;width:6px;height:6px;border-radius:50%;background:var(--green-l);pointer-events:none}
+
+/* Empty */
+.empty{text-align:center;padding:56px 32px;background:#fff;border-radius:16px;border:2px dashed var(--gray-200);color:var(--gray-400)}
+.empty-icon{font-size:40px;margin-bottom:10px}
+
+/* Exercise card (therapist) */
+.ex-card{background:#fff;border-radius:14px;border:1px solid var(--gray-200);overflow:hidden;box-shadow:var(--shadow);margin-bottom:10px}
+.ex-head{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;transition:background .15s}
+.ex-head:hover{background:var(--gray-50)}
+.ex-icon{width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;overflow:hidden;position:relative}
+.ex-icon img{width:100%;height:100%;object-fit:cover;border-radius:10px}
+.ex-body{border-top:1px solid var(--gray-100);padding:16px 18px;background:var(--gray-50)}
+.ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chevron{color:var(--gray-400);font-size:12px;transition:transform .2s;flex-shrink:0;margin:0 4px}
+.chevron.open{transform:rotate(180deg)}
+
+/* Image upload area */
+.img-upload-area{border:2px dashed var(--gray-200);border-radius:10px;padding:14px;text-align:center;cursor:pointer;transition:all .15s;background:#fff;position:relative}
+.img-upload-area:hover{border-color:var(--blue-l);background:var(--blue-bg)}
+.img-upload-area.has-img{border-style:solid;border-color:var(--gray-200);padding:6px}
+.img-preview{width:100%;max-height:120px;object-fit:contain;border-radius:8px;display:block}
+.img-upload-hint{font-size:12px;color:var(--gray-400);margin-top:4px}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:500;padding:24px}
+.modal{background:#fff;border-radius:20px;width:660px;max-width:96vw;max-height:90vh;overflow:hidden;display:flex;flex-direction:column}
+.modal-sm{width:500px}
+.modal-lg{width:780px}
+.modal-hd{padding:22px 26px 18px;border-bottom:1px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.modal-title{font-size:17px;font-weight:700}
+.modal-body{overflow-y:auto;padding:22px 26px 28px;flex:1}
+.modal-footer{padding:16px 26px;border-top:1px solid var(--gray-200);display:flex;gap:10px;justify-content:flex-end;flex-shrink:0}
+.type-tabs{display:flex;border-bottom:1px solid var(--gray-200);flex-shrink:0}
+.type-tab{flex:1;padding:13px 8px;border:none;cursor:pointer;background:none;font-size:13px;font-weight:500;color:var(--gray-500);border-bottom:2px solid transparent;transition:all .15s;font-family:var(--font)}
+.type-tab.active{color:var(--blue);font-weight:700;border-bottom-color:var(--blue);background:var(--blue-bg)}
+.exlib-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+.lib-card{text-align:left;padding:13px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:12px;cursor:pointer;transition:all .15s;font-family:var(--font);width:100%}
+.lib-card:hover{background:var(--blue-bg);border-color:#bfdbfe;transform:translateY(-1px)}
+.lib-section-title{font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--gray-100)}
+
+/* Patient management table */
+.pm-table{width:100%;border-collapse:collapse}
+.pm-table th{text-align:left;font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.8px;text-transform:uppercase;padding:0 16px 10px;border-bottom:1px solid var(--gray-200)}
+.pm-table td{padding:14px 16px;border-bottom:1px solid var(--gray-100);vertical-align:middle;font-size:14px;color:var(--gray-600)}
+.pm-table tr:last-child td{border-bottom:none}
+.pm-table tr:hover td{background:var(--gray-50)}
+.status-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px}
+.status-active{background:#dcfce7;color:#166534}
+.status-inactive{background:var(--gray-100);color:var(--gray-400)}
+
+/* Copy program */
+.copy-week-bar{background:#fff;border:1px solid var(--gray-200);border-radius:12px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.week-nav-btn{background:var(--gray-100);border:none;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;color:var(--gray-600);cursor:pointer;transition:background .15s}
+.week-nav-btn:hover{background:var(--gray-200)}
+.copy-day-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:10px}
+.copy-day-card{border-radius:9px;padding:8px 4px;text-align:center;border:1.5px solid var(--gray-200);cursor:pointer;transition:all .15s;background:#fff;position:relative}
+.copy-day-card:hover{border-color:var(--blue-l);background:var(--blue-bg)}
+.copy-day-card.selected{border-color:var(--blue);background:var(--blue-bg)}
+.copy-day-card.has-ex::after{content:'';position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--green-l)}
+
+/* Patient portal */
+.p-nav{background:#fff;border-bottom:1px solid var(--gray-200);padding:0 24px;display:flex}
+.p-nav-btn{padding:16px 18px;border:none;cursor:pointer;background:none;font-size:14px;color:var(--gray-500);font-family:var(--font);border-bottom:2px solid transparent;display:flex;align-items:center;gap:6px;transition:all .15s}
+.p-nav-btn:hover{color:var(--gray-900)}
+.p-nav-btn.active{color:var(--blue);font-weight:600;border-bottom-color:var(--blue)}
+.p-main{max-width:800px;margin:0 auto;padding:28px 24px}
+.pday-tab{padding:8px 14px;border-radius:20px;border:1px solid var(--gray-200);cursor:pointer;background:#fff;color:var(--gray-600);font-size:13px;font-family:var(--font);transition:all .2s;position:relative}
+.pday-tab.active{background:var(--green-l);color:#fff;font-weight:600;border-color:var(--green-l);box-shadow:0 4px 12px rgba(16,185,129,.3)}
+
+/* Patient workout table */
+.pt-section{background:#fff;border-radius:16px;border:1px solid var(--gray-200);margin-bottom:18px;overflow:hidden;box-shadow:var(--shadow)}
+.pt-section-hdr{padding:14px 18px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--gray-100)}
+.pt-section-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.wk-table{width:100%;border-collapse:collapse}
+.wk-table th{text-align:left;font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.6px;text-transform:uppercase;padding:9px 14px;border-bottom:1px solid var(--gray-200);background:var(--gray-50)}
+.wk-table td{padding:12px 14px;border-bottom:1px solid var(--gray-100);font-size:14px;vertical-align:middle}
+.wk-table tr:last-child td{border-bottom:none}
+.wk-table tr.row-done td{background:#f0fdf4}
+.wk-table tr.row-done .ex-row-name{text-decoration:line-through;color:var(--gray-400)}
+.ex-row-img{width:38px;height:38px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;cursor:zoom-in;transition:transform .15s}
+.ex-row-img:hover{transform:scale(1.1)}
+.ex-row-img img{width:38px;height:38px;object-fit:cover;border-radius:8px}
+.row-check-btn{width:32px;height:32px;border-radius:50%;border:2px solid var(--gray-200);background:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s;color:var(--gray-300)}
+.row-check-btn.done{background:var(--green-l);border-color:var(--green-l);color:#fff;box-shadow:0 3px 8px rgba(16,185,129,.4)}
+
+/* Interval sub-table inside patient view */
+.iv-sub{width:100%;border-collapse:collapse;margin-top:6px}
+.iv-sub th{font-size:10px;font-weight:700;color:var(--gray-400);letter-spacing:.5px;text-transform:uppercase;padding:4px 8px;background:var(--gray-50);border-bottom:1px solid var(--gray-200)}
+.iv-sub td{font-size:12px;padding:5px 8px;border-bottom:1px solid var(--gray-100);color:var(--gray-600)}
+.iv-sub tr:last-child td{border-bottom:none}
+
+/* Session RPE footer */
+.session-rpe-bar{padding:16px 18px;background:var(--gray-50);border-top:1px solid var(--gray-200);display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+
+/* ── Progress graphs ── */
+.graph-card{background:#fff;border-radius:14px;border:1px solid var(--gray-200);padding:20px 22px;margin-bottom:16px;box-shadow:var(--shadow)}
+.graph-title{font-size:15px;font-weight:700;margin-bottom:4px}
+.graph-sub{font-size:12px;color:var(--gray-400);margin-bottom:14px}
+.graph-range-toggle{display:flex;gap:0;border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;width:fit-content;margin-bottom:18px}
+.graph-range-btn{background:#fff;border:none;padding:6px 16px;font-size:12px;font-weight:600;color:var(--gray-500);cursor:pointer;font-family:var(--font);transition:all .15s}
+.graph-range-btn.active{background:var(--blue);color:#fff}
+.graph-legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:12px}
+.graph-legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray-600);font-weight:600}
+.graph-legend-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+/* Week card */
+.week-card{background:#fff;border-radius:14px;padding:16px 20px;border:1px solid var(--gray-200);margin-bottom:10px}
+.week-card.today{border:2px solid var(--green-l)}
+.success-card{text-align:center;padding:56px 32px;background:var(--green-bg);border-radius:20px;border:2px solid #86efac}
+
+/* ── Calendar / Week nav shared ── */
+.cal-nav{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.cal-nav-btn{background:var(--gray-100);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--gray-600);cursor:pointer;transition:background .15s;font-family:var(--font)}
+.cal-nav-btn:hover{background:var(--gray-200)}
+.cal-nav-title{font-size:17px;font-weight:800;color:var(--gray-900);flex:1;text-align:center}
+.cal-today-btn{background:var(--blue-bg);color:var(--blue);border:1px solid #bfdbfe;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font);transition:background .15s}
+.cal-today-btn:hover{background:#dbeafe}
+/* View toggle pills */
+.view-toggle{display:flex;gap:0;border:1px solid var(--gray-200);border-radius:10px;overflow:hidden}
+.view-toggle-btn{background:#fff;border:none;padding:7px 16px;font-size:13px;font-weight:500;color:var(--gray-500);cursor:pointer;font-family:var(--font);transition:all .15s}
+.view-toggle-btn:hover{background:var(--gray-50)}
+.view-toggle-btn.active{background:var(--blue);color:#fff;font-weight:700}
+
+/* ── Week grid view ── */
+.week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px}
+.week-grid-col{border-radius:12px;border:1px solid var(--gray-200);overflow:hidden;background:#fff;min-height:120px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.week-grid-col:hover{border-color:var(--blue-l);box-shadow:0 2px 12px rgba(59,130,246,.15)}
+.week-grid-col.is-today{border:2px solid var(--green-l)}
+.week-grid-col.is-selected{border:2px solid var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+.wg-hdr{padding:8px 10px;border-bottom:1px solid var(--gray-100);text-align:center}
+.wg-dayname{font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px}
+.wg-date{font-size:18px;font-weight:800;color:var(--gray-900);margin-top:1px;line-height:1}
+.wg-date.today-num{width:30px;height:30px;border-radius:50%;background:var(--green-l);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:15px;margin:2px auto 0}
+.wg-pills{padding:6px 7px;display:flex;flex-direction:column;gap:3px}
+.wg-pill{font-size:10px;padding:2px 6px;border-radius:20px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wg-rest{font-size:11px;color:var(--gray-300);padding:8px 10px;text-align:center}
+
+/* ── Month calendar ── */
+.month-grid-header{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px}
+.month-grid-header div{text-align:center;font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.5px;padding:6px 0}
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.month-cell{border-radius:10px;border:1px solid var(--gray-200);min-height:80px;padding:6px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;overflow:hidden}
+.month-cell:hover{border-color:var(--blue-l);box-shadow:0 2px 8px rgba(59,130,246,.12)}
+.month-cell.other-month{background:var(--gray-50);opacity:.5}
+.month-cell.is-today{border:2px solid var(--green-l)}
+.month-cell.is-selected{border:2px solid var(--blue);background:var(--blue-bg)}
+.mc-num{font-size:13px;font-weight:700;color:var(--gray-700);margin-bottom:4px;display:inline-block}
+.mc-today .mc-num{width:24px;height:24px;border-radius:50%;background:var(--green-l);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+.mc-dots{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.mc-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.mc-count{font-size:10px;color:var(--gray-400);margin-top:3px}
+
+/* ── Day detail panel (used on both sides) ── */
+.day-detail-panel{background:#fff;border-radius:16px;border:1px solid var(--gray-200);padding:20px 22px;margin-top:14px;box-shadow:var(--shadow)}
+.ddp-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap}
+.ddp-date{font-size:16px;font-weight:800;color:var(--gray-900)}
+.ddp-date-sub{font-size:12px;color:var(--gray-400);margin-top:2px}
+.metric-card{background:#fff;border-radius:14px;padding:20px 22px;border:1px solid var(--gray-200);margin-bottom:14px}
+input[type=range]{width:100%;cursor:pointer}
+input[type=range].blue{accent-color:var(--blue-l)}
+input[type=range].red{accent-color:var(--red-l)}
+input[type=range].amber{accent-color:var(--amber-l)}
+input[type=range].green{accent-color:var(--green-l)}
+
+/* Lightbox */
+.img-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:zoom-out;backdrop-filter:blur(6px)}
+.img-lightbox-inner{display:flex;flex-direction:column;align-items:center;gap:14px;padding:24px;text-align:center}
+.img-lightbox-emoji{font-size:130px;line-height:1;user-select:none}
+.img-lightbox-img{max-width:360px;max-height:360px;object-fit:contain;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.img-lightbox-name{color:#fff;font-size:22px;font-weight:700}
+.img-lightbox-type{font-size:13px;font-weight:600;padding:4px 14px;border-radius:20px}
+
+/* Aerobic interval table */
+.interval-table{width:100%;border-collapse:collapse;margin-bottom:10px}
+.interval-table th{text-align:left;font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.6px;text-transform:uppercase;padding:8px 10px;border-bottom:2px solid var(--gray-200);background:var(--gray-50)}
+.interval-table td{padding:8px 10px;border-bottom:1px solid var(--gray-100);font-size:13px;vertical-align:middle}
+.interval-table tr:last-child td{border-bottom:none}
+.interval-table tr:hover td{background:var(--gray-50)}
+.interval-table input,.interval-table select{padding:5px 8px;border:1px solid var(--gray-200);border-radius:6px;font-size:13px;width:100%;outline:none;font-family:var(--font);background:#fff}
+.interval-table input:focus,.interval-table select:focus{border-color:var(--blue-l)}
+.int-del-btn{background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:4px 8px;cursor:pointer;color:var(--red);font-size:12px}
+.int-del-btn:hover{background:#fee2e2}
+.add-interval-btn{display:flex;align-items:center;gap:6px;padding:7px 14px;background:var(--blue-bg);border:1px dashed var(--blue-l);border-radius:8px;color:var(--blue);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;font-family:var(--font)}
+.add-interval-btn:hover{background:#dbeafe}
+
+/* Phone login */
+.phone-login-wrap{display:flex;flex-direction:column;gap:16px}
+.phone-input-row{display:flex;gap:8px;align-items:stretch}
+.phone-prefix{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:11px 14px;color:#fff;font-size:15px;font-weight:600;min-width:56px;text-align:center;flex-shrink:0}
+.phone-field{flex:1;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:12px 14px;color:#fff;font-size:15px;outline:none;font-family:var(--font)}
+.phone-field::placeholder{color:rgba(255,255,255,.3)}
+.phone-field:focus{border-color:var(--green-l);background:rgba(255,255,255,.11)}
+.phone-login-btn{background:linear-gradient(135deg,var(--green-l),var(--green));border:none;border-radius:10px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 6px 18px rgba(16,185,129,.35);transition:opacity .2s}
+.phone-login-btn:hover{opacity:.88}
+.phone-error{color:#fca5a5;font-size:13px;text-align:center;min-height:18px}
+
+/* Therapist auth */
+.auth-field{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:12px 14px;color:#fff;font-size:15px;outline:none;font-family:var(--font);box-sizing:border-box}
+.auth-field::placeholder{color:rgba(255,255,255,.3)}
+.auth-field:focus{border-color:var(--blue-l);background:rgba(255,255,255,.11)}
+.auth-btn{width:100%;background:linear-gradient(135deg,var(--blue-l),var(--blue));border:none;border-radius:10px;padding:13px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:var(--font);box-shadow:0 6px 18px rgba(59,130,246,.35);transition:opacity .2s}
+.auth-btn:hover{opacity:.88}
+.auth-error{color:#fca5a5;font-size:13px;text-align:center;min-height:18px}
+.auth-link{background:none;border:none;color:rgba(255,255,255,.5);font-size:13px;cursor:pointer;font-family:var(--font);text-decoration:underline;padding:0}
+.auth-link:hover{color:rgba(255,255,255,.8)}
+.auth-success{color:#86efac;font-size:13px;text-align:center;min-height:18px}
+.pw-toggle{position:relative}
+.pw-toggle input{padding-right:42px}
+.pw-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;font-size:16px;padding:0;line-height:1}
+.pw-eye:hover{color:rgba(255,255,255,.8)}
+
+/* Share program buttons */
+.share-bar{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.share-btn-wa{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;background:#25d366;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:opacity .2s;text-decoration:none}
+.share-btn-wa:hover{opacity:.88}
+.share-btn-email{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;background:var(--blue-bg);color:var(--blue);border:1px solid #bfdbfe;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;font-family:var(--font);transition:all .2s;text-decoration:none}
+.share-btn-email:hover{background:#dbeafe}
+
+/* ═══════════════════════════════════════════════════════
+   RESPONSIVE / MOBILE STYLES
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Therapist sidebar: collapsible on mobile ── */
+#t-sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:299}
+.sidebar-toggle{display:none;background:none;border:none;font-size:22px;cursor:pointer;padding:4px 8px;color:var(--gray-600);line-height:1}
+
+/* ── Patient bottom tab bar (mobile only, hidden on desktop) ── */
+.p-bottom-nav{
+  display:none;
+  position:fixed;bottom:0;left:0;right:0;
+  background:#fff;
+  border-top:1px solid var(--gray-200);
+  z-index:200;
+  /* safe area for iPhone home indicator */
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  box-shadow:0 -2px 12px rgba(0,0,0,.08);
+}
+.p-bottom-nav-inner{display:flex;height:56px}
+.p-bottom-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:2px;border:none;background:none;cursor:pointer;
+  font-family:var(--font);font-size:10px;font-weight:600;
+  color:var(--gray-400);padding:0;transition:color .15s;
+  -webkit-tap-highlight-color:transparent;
+  min-width:44px;
+}
+.p-bottom-btn.active{color:var(--blue)}
+.p-bottom-btn .tab-icon{font-size:20px;line-height:1}
+.p-bottom-btn .tab-label{font-size:10px;letter-spacing:.2px}
+
+/* ── Patient exercise card layout (mobile: card instead of table row) ── */
+.ex-mobile-card{
+  display:none;
+  background:#fff;border-radius:12px;border:1px solid var(--gray-200);
+  padding:14px;margin-bottom:10px;
+  box-shadow:var(--shadow);
+  transition:background .15s;
+}
+.ex-mobile-card.done{background:#f0fdf4;border-color:#86efac}
+.ex-mobile-card-row{display:flex;align-items:center;gap:12px}
+.ex-mobile-check{width:44px;height:44px;border-radius:50%;border:2px solid var(--gray-200);background:#fff;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;
+  transition:all .2s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
+.ex-mobile-check.done{background:var(--green-l);border-color:var(--green-l);color:#fff;box-shadow:0 3px 10px rgba(16,185,129,.4)}
+.ex-mobile-info{flex:1;min-width:0}
+.ex-mobile-name{font-size:15px;font-weight:700;color:var(--gray-900);margin-bottom:2px}
+.ex-mobile-meta{font-size:12px;color:var(--gray-400);line-height:1.5}
+.ex-mobile-img{width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;cursor:zoom-in}
+.ex-mobile-img-emoji{width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+
+@media (max-width: 900px) {
+  /* Topbar */
+  .topbar{padding:0 14px;height:54px}
+  .sidebar-toggle{display:flex;align-items:center}
+
+  /* Therapist layout: sidebar slides in as a drawer */
+  .t-layout{height:calc(100vh - 54px)}
+  .sidebar{
+    position:fixed;top:54px;left:0;height:calc(100vh - 54px);
+    width:280px;z-index:300;
+    transform:translateX(-100%);transition:transform .25s ease;
+    box-shadow:4px 0 24px rgba(0,0,0,.12);
+  }
+  .sidebar.open{transform:translateX(0)}
+  #t-sidebar-overlay.visible{display:block}
+  .main-content{padding:16px}
+
+  /* Hero: stack vertically */
+  .p-hero{flex-direction:column;align-items:flex-start;gap:10px;padding:16px 18px}
+
+  /* Patient table: hide DOB column */
+  .pm-table th:nth-child(3),.pm-table td:nth-child(3){display:none}
+
+  /* Exercise grid: single column */
+  .ex-grid{grid-template-columns:1fr}
+
+  /* Copy-day grid: 4 cols */
+  .copy-day-grid{grid-template-columns:repeat(4,1fr)}
+
+  /* View toggle: shrink */
+  .view-toggle-btn{padding:6px 10px;font-size:12px}
+  #t-reports-toggle .view-toggle-btn{padding:6px 10px;font-size:12px}
+
+  /* Week grid */
+  .week-grid{grid-template-columns:repeat(4,1fr)}
+
+  /* Month cells */
+  .month-cell{min-height:56px;padding:4px}
+  .mc-num{font-size:11px}
+
+  .day-detail-panel{padding:14px}
+
+  /* Modals */
+  .overlay{padding:12px;align-items:flex-end}
+  .modal,.modal-sm,.modal-lg{width:100%;max-width:100%;border-radius:20px 20px 0 0;max-height:92vh}
+  .modal-body{padding:16px 18px 22px}
+  .modal-hd{padding:16px 18px 14px}
+
+  /* Splash card */
+  .splash-card{padding:32px 24px}
+
+  /* Hide top patient nav — replaced by bottom bar on mobile */
+  .p-nav{display:none}
+
+  /* Show bottom tab bar */
+  .p-bottom-nav{display:block}
+
+  /* Patient main: padding for bottom nav + safe area */
+  .p-main{
+    padding:16px 14px calc(56px + env(safe-area-inset-bottom,0px) + 16px);
+  }
+
+  /* Workout table: tighten */
+  .wk-table th,.wk-table td{padding:9px 10px;font-size:13px}
+
+  /* Day tabs: scrollable strip */
+  #p-day-tabs,#t-day-tabs{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    padding-bottom:4px;scrollbar-width:none;
+  }
+  #p-day-tabs::-webkit-scrollbar,#t-day-tabs::-webkit-scrollbar{display:none}
+  .day-tab,.pday-tab{flex-shrink:0}
+
+  /* Show mobile exercise cards, hide table */
+  .ex-mobile-card{display:block}
+  .wk-table-wrap{display:none}  /* wrap tables for patient exercise list on mobile */
+
+  /* Progress graph range toggle: full width */
+  .graph-range-toggle{width:100%}
+  .graph-range-btn{flex:1;text-align:center;padding:8px 6px}
+
+  /* Cal nav */
+  .cal-nav-title{font-size:14px}
+  .cal-nav-btn{padding:8px 12px}
+
+  /* Share bar: stack */
+  .share-bar{flex-direction:column}
+  .share-btn-wa,.share-btn-email{justify-content:center;padding:14px 18px;font-size:15px}
+
+  /* Patient topbar: compact */
+  #screen-patient .topbar .btn-ghost{font-size:12px;padding:7px 10px}
+  #p-greeting{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
+
+@media (max-width: 600px) {
+  .topbar{padding:0 10px;height:52px}
+  .splash-card{padding:22px 16px;border-radius:20px}
+
+  /* Therapist sidebar adjusted for smaller topbar */
+  .t-layout{height:calc(100vh - 52px)}
+  .sidebar{top:52px;height:calc(100vh - 52px)}
+
+  /* Hero */
+  .p-hero{padding:12px 14px;border-radius:12px;margin-bottom:14px}
+  #t-hero-name{font-size:17px!important}
+
+  /* P-main */
+  .p-main{padding:12px 12px calc(56px + env(safe-area-inset-bottom,0px) + 12px)}
+
+  /* Week grid: 7 cols but compact */
+  .week-grid{grid-template-columns:repeat(7,1fr);gap:3px}
+  .wg-hdr{padding:4px 2px}
+  .wg-dayname{font-size:8px;letter-spacing:0}
+  .wg-date{font-size:13px}
+  .wg-pills{padding:3px 3px;gap:2px}
+  .wg-pill{font-size:8px;padding:1px 3px}
+  .wg-rest{font-size:9px;padding:4px 2px}
+  .week-grid-col{min-height:90px}
+
+  /* Month micro */
+  .month-cell{min-height:40px;padding:3px}
+  .mc-num{font-size:10px;margin-bottom:1px}
+  .mc-dots{gap:2px;margin-top:1px}
+  .mc-dot{width:5px;height:5px}
+  .mc-count{display:none}
+  .month-grid-header div{font-size:9px;padding:4px 0}
+
+  /* Cal nav */
+  .cal-nav{margin-bottom:12px;gap:6px}
+  .cal-nav-title{font-size:13px}
+  .cal-nav-btn{padding:7px 10px;font-size:12px}
+  .cal-today-btn{padding:5px 10px;font-size:11px}
+
+  /* Modal full-screen on phone */
+  .overlay{padding:0;align-items:flex-end}
+  .modal,.modal-sm,.modal-lg{border-radius:20px 20px 0 0;max-height:96vh}
+
+  /* Modal footer: stack */
+  .modal-footer{flex-direction:column;gap:8px}
+
+  /* Ex grid single */
+  .ex-grid{grid-template-columns:1fr!important}
+
+  /* Copy day grid */
+  .copy-day-grid{grid-template-columns:repeat(7,1fr);gap:3px}
+  .copy-day-card{padding:5px 2px}
+
+  /* Metric card */
+  .metric-card{padding:14px}
+
+  /* Buttons */
+  .btn{padding:9px 14px;font-size:13px}
+  .btn-success{padding:14px;font-size:15px}
+
+  /* Auth inputs */
+  .auth-field,.phone-field{padding:14px;font-size:16px}
+  .auth-btn,.phone-login-btn{padding:15px;font-size:16px;border-radius:12px}
+
+  /* Session RPE bar */
+  .session-rpe-bar{flex-direction:column;align-items:stretch;gap:10px}
+
+  /* Empty */
+  .empty{padding:32px 16px}
+
+  /* Hide table headers/columns on phones for patient view  */
+  .wk-table th:nth-child(4),
+  .wk-table td:nth-child(4){display:none}
+}
+
+@media (min-width: 901px) {
+  /* Desktop: always show sidebar, never show bottom bar */
+  .sidebar{transform:none!important;position:relative!important;top:auto!important}
+  #t-sidebar-overlay{display:none!important}
+  .p-bottom-nav{display:none!important}
+  /* Desktop: always show top nav */
+  .p-nav{display:flex!important}
+  /* Desktop: p-main normal padding */
+  .p-main{padding:28px 24px}
+  /* Desktop: hide mobile exercise cards, show table */
+  .ex-mobile-card{display:none!important}
+  .wk-table-wrap{display:block!important}
+}
+
+/* ── React component additions ── */
+.stat-box{background:var(--gray-50);border-radius:10px;padding:10px 14px}
+.stat-label{display:block;font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.6px;text-transform:uppercase;margin-bottom:3px}
+.stat-val{font-size:15px;font-weight:700;color:var(--gray-900)}
+
+.link-btn{background:none;border:none;color:var(--blue);font-size:13px;cursor:pointer;font-family:var(--font);padding:0;text-decoration:underline}
+.link-btn.danger{color:var(--red)}
+
+/* Therapist layout */
+.t-layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:260px;background:#fff;border-right:1px solid var(--gray-200);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+.sidebar-header{padding:20px 16px 12px;border-bottom:1px solid var(--gray-100)}
+.sidebar-logo{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.sidebar-brand{font-size:18px;font-weight:800;color:var(--blue)}
+.sidebar-name-btn{background:none;border:none;font-size:13px;font-weight:600;color:var(--gray-700);cursor:pointer;text-align:left;padding:2px 0;font-family:var(--font)}
+.sidebar-name-btn:hover{color:var(--blue)}
+.sidebar-nav{padding:12px 8px 8px}
+.sidebar-nav-item{display:block;width:100%;text-align:left;padding:10px 12px;border-radius:10px;border:none;background:none;font-size:14px;font-weight:500;color:var(--gray-700);cursor:pointer;font-family:var(--font);margin-bottom:2px;transition:all .15s}
+.sidebar-nav-item:hover{background:var(--gray-50)}
+.sidebar-nav-item.active{background:var(--blue-bg);color:var(--blue);font-weight:700}
+.sidebar-section-label{font-size:11px;font-weight:700;color:var(--gray-400);letter-spacing:.8px;text-transform:uppercase;padding:8px 20px 6px}
+.patient-list{flex:1;overflow-y:auto;padding:0 8px}
+.patient-list-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:10px;border:none;background:none;cursor:pointer;font-family:var(--font);text-align:left;margin-bottom:2px;transition:all .15s}
+.patient-list-item:hover{background:var(--gray-50)}
+.patient-list-item.active{background:var(--blue-bg)}
+.pt-avatar{width:36px;height:36px;border-radius:50%;background:var(--blue-bg);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.sidebar-footer{padding:12px 8px 16px;border-top:1px solid var(--gray-100);margin-top:auto}
+.sidebar-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199}
+.t-main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:#f8fafc}
+.t-mobile-header{display:none;align-items:center;justify-content:space-between;padding:14px 16px;background:#fff;border-bottom:1px solid var(--gray-200)}
+.t-content{flex:1;overflow-y:auto;padding:32px 36px}
+
+/* Patient portal */
+.p-portal{display:flex;flex-direction:column;height:100vh}
+.p-nav{background:#fff;border-bottom:1px solid var(--gray-200);padding:0 24px;display:flex;flex-shrink:0}
+.p-main{flex:1;overflow-y:auto;max-width:740px;margin:0 auto;padding:28px 24px;width:100%}
+
+/* Bottom nav */
+.btm-nav{display:none;background:#fff;border-top:1px solid var(--gray-200);flex-shrink:0}
+.btm-tab{flex:1;border:none;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;color:var(--gray-400);transition:color .15s;font-family:var(--font);padding:8px 0}
+.btm-tab.active{color:var(--blue)}
+.btm-icon{font-size:20px}
+.btm-label{font-size:10px;font-weight:600}
+
+/* Active tab button */
+.active-tab{background:var(--blue-bg)!important;color:var(--blue)!important;border-color:#bfdbfe!important}
+
+/* Share buttons */
+.btn-whatsapp{background:#25d366;color:#fff}
+.btn-whatsapp:hover{background:#22c55e}
+.btn-email{background:var(--blue-bg);color:var(--blue);border:1px solid #bfdbfe}
+.btn-email:hover{background:#dbeafe}
+.btn-outline-green{background:var(--green-bg);color:var(--green);border:1px solid #86efac}
+.btn-outline-green:hover{background:#dcfce7}
+
+@media(max-width:900px){
+  .t-mobile-header{display:flex}
+  .t-content{padding:20px 18px}
+  .sidebar{position:fixed;left:0;top:0;height:100%;z-index:200;transform:translateX(-100%);transition:transform .25s}
+  .sidebar.open{transform:translateX(0)}
+}
+@media(max-width:600px){
+  .p-nav{display:none}
+  .btm-nav{display:flex}
+  .p-main{padding:14px;padding-bottom:80px}
+}
+/* ===== Resistance Table ===== */
+
+.resistance-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  min-width: 700px;
+}
+
+.resistance-table th {
+  text-align: left;
+  padding: 10px;
+  font-size: 12px;
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
+.resistance-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--gray-200);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.resistance-table tr.done {
+  opacity: 0.6;
+}
+
+.resistance-table tr:hover {
+  background: var(--gray-50);
+}
+
+.resistance-extra td {
+  background: var(--gray-50);
+  font-size: 13px;
+}
+/* ===== Resistance body group header ===== */
+
+.body-group td {
+  font-weight: 700;
+  background: var(--gray-100);
+  color: var(--gray-700);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.resistance-table tr {
+  border-bottom: 1px solid var(--gray-200);
+}
+.actual-input {
+  width: 64px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: center;
+  background: #fff;
+  color: #111;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+.actual-input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(59,130,246,.18);
+  background: #f5f8ff;
+}
+.actual-input::placeholder {
+  color: #4b5563;
+  font-weight: 500;
+  font-size: 14px;
+}
