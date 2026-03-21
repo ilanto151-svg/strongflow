@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors    = require('cors');
 const path    = require('path');
-
+const { testPgConnection } = require('./pg');
 const app = express();
 
 app.use(cors({ origin: process.env.CLIENT_URL || '*' }));
@@ -50,6 +50,8 @@ app.use((err, req, res, next) => {
   console.error(err);
   res.status(500).json({ error: err.message || 'Server error' });
 });
-
+testPgConnection().catch(err => {
+  console.error('❌ Postgres connection failed:', err.message);
+});
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`💪 StrongFlow server running on port ${PORT}`));
