@@ -1,8 +1,6 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-console.log('DATABASE_URL:', process.env.DATABASE_URL);
-
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production'
@@ -10,7 +8,6 @@ const pool = new Pool({
     : false,
 });
 
-// 🔥 יצירת טבלה אוטומטית
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS patients (
@@ -33,12 +30,40 @@ async function initDB() {
     );
   `);
 
-  console.log('✅ Patients table ready');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS exercises (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      day_key INTEGER NOT NULL,
+      instance_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      image TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      equipment TEXT DEFAULT '',
+      sets TEXT DEFAULT '',
+      reps TEXT DEFAULT '',
+      duration TEXT DEFAULT '',
+      body_area TEXT DEFAULT '',
+      weight TEXT DEFAULT '',
+      rest TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      rpe INTEGER DEFAULT 5,
+      img_data TEXT,
+      img_url TEXT,
+      link TEXT,
+      intervals TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  console.log('✅ Tables ready (patients + exercises)');
 }
 
 async function testPgConnection() {
-  await initDB(); // 🔥 חשוב מאוד
-  const result = await pool.query('SELECT NOW()');
+  await initDB();
+  const result = await pool.query('SELECT NOW() AS now');
   console.log('✅ Postgres connected:', result.rows[0].now);
 }
 
