@@ -77,7 +77,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
     setForm(f => ({ ...f, img_data: '', img_url: '' }));
   }
 
-  // ── Intervals (aerobic) ───────────────────────────────────────────────────
   function addInterval() {
     set('intervals', [...(form.intervals || []), { id: uid(), intensity: 'moderate', duration: '', rpe: '' }]);
   }
@@ -100,7 +99,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
   return (
     <div>
-      {/* Type tabs */}
       {!editing && (
         <div className="type-tabs">
           {Object.entries(TYPE_META).map(([k, m]) => (
@@ -209,7 +207,18 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             </div>
 
             <div className="form-row">
-              <label className="form-label">Image</label>
+              <label className="form-label">Image DEBUG</label>
+
+              <div style={{ fontSize: 12, color: 'red', marginBottom: 8 }}>
+                DEBUG-EXERCISEFORM-IS-RENDERING
+              </div>
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImg}
+                style={{ display: 'block', marginBottom: 10 }}
+              />
 
               {form.img_data && (
                 <div style={{ marginBottom: 8 }}>
@@ -222,41 +231,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                {/*
-                  The input is nested INSIDE the label and covers it with position:absolute inset:0.
-                  This keeps the input within the label's visible bounds, so it is never clipped
-                  by .modal { overflow: hidden } — which was the root cause of all previous failures.
-                  The user's click lands directly on the input; no ref.click() or htmlFor needed.
-                */}
-                <label
-                  className="btn btn-ghost"
-                  style={{
-                    fontSize: 13,
-                    cursor: imgLoading ? 'not-allowed' : 'pointer',
-                    opacity: imgLoading ? 0.6 : 1,
-                    position: 'relative',
-                    overflow: 'hidden',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  {imgLoading ? 'Loading…' : 'Choose image'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={imgLoading}
-                    onChange={handleImg}
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      opacity: 0,
-                      cursor: 'pointer',
-                      width: '100%',
-                      height: '100%',
-                    }}
-                  />
-                </label>
-
                 <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                   {form.img_data ? 'Image selected' : 'No file chosen'}
                 </span>
