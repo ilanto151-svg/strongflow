@@ -1,85 +1,222 @@
 // server/routes/share.js
 const router = require('express').Router();
-const db     = require('../db');
+const crypto = require('crypto');
+const pool = require('../pg');
 const { authTherapist } = require('../middleware/auth');
 
 // Support both /generate (body.patientId) and /generate/:pid
 // POST /generate/:pid — main handler below
 
-router.post('/generate/:pid', authTherapist, (req, res) => {
-  const p = db.prepare('SELECT * FROM patients WHERE id=? AND therapist_id=?').get(req.params.pid, req.user.id);
-  if (!p) return res.status(403).json({ error: 'Forbidden' });
-  const t = db.prepare('SELECT name FROM therapists WHERE id=?').get(req.user.id);
+router.post('/generate/:pid', authTherapist, async (req, res) => {
+  try {
+    // 1) Verify patient belongs to therapist
+    const patientResult = await pool.query(
+      `SELECT *
+       FROM patients
+       WHERE id = $1 AND therapist_id = $2`,
+      [req.params.pid, req.user.id]
+    );
 
-  // Build 4 weeks of plan data (-1 to +2 from current week)
-  const exercises = db.prepare('SELECT * FROM exercises WHERE patient_id=? ORDER BY day_key,sort_order').all(req.params.pid);
-  const reports   = db.prepare('SELECT * FROM reports WHERE patient_id=?').all(req.params.pid);
-
-  // Group exercises by day_key
-  const exByDay = {};
-  exercises.forEach(ex => {
-    if (!exByDay[ex.day_key]) exByDay[ex.day_key] = [];
-    exByDay[ex.day_key].push({
-      instanceId: ex.instance_id, type: ex.type, name: ex.name,
-      image: ex.image, description: ex.description, equipment: ex.equipment,
-      sets: ex.sets, reps: ex.reps, duration: ex.duration, notes: ex.notes,
-      rpe: ex.rpe, imgData: ex.img_data, imgUrl: ex.img_url, link: ex.link,
-      intervals: ex.intervals ? JSON.parse(ex.intervals) : []
-    });
-  });
-
-  // Build report map
-  const repMap = {};
-  reports.forEach(r => {
-    repMap[r.day_key] = { fatigue: r.fatigue, pain: r.pain, wellbeing: r.wellbeing, notes: r.notes, session_rpe: r.session_rpe ? JSON.parse(r.session_rpe) : null };
-  });
-
-  // Generate weeks array: week offsets -1 to +2
-  // day_key = weekOffset * 7 + dayOfWeek (base = Sunday of current week at server time)
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const wSun = new Date(now);
-  wSun.setDate(wSun.getDate() - wSun.getDay()); // Sunday of current week
-
-  const weekData = [];
-  for (let w = -1; w <= 2; w++) {
-    const sun = new Date(wSun);
-    sun.setDate(sun.getDate() + w * 7);
-    const days = [];
-    for (let d = 0; d < 7; d++) {
-      const date = new Date(sun);
-      date.setDate(date.getDate() + d);
-      const key = w * 7 + d;
-      const exs = (exByDay[key] || []).map(ex => {
-        const e = { ...ex };
-        if (e.imgData && e.imgData.length > 40000) delete e.imgData;
-        return e;
-      });
-      days.push({ date: date.toISOString().slice(0, 10), dow: d, key, exs });
+    const p = patientResult.rows[0];
+    if (!p) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
-    weekData.push({ weekOffset: w, sun: sun.toISOString().slice(0, 10), days });
+
+    // 2) Get therapist name
+    const therapistResult = await pool.query(
+      `SELECT name
+       FROM therapists
+       WHERE id = $1`,
+      [req.user.id]
+    );
+
+    const t = therapistResult.rows[0] || null;
+
+    // 3) Get exercises for patient
+    const exercisesResult = await pool.query(
+      `SELECT *
+       FROM exercises
+       WHERE patient_id = $1
+       ORDER BY day_key, sort_order`,
+      [req.params.pid]
+    );
+
+    const exercises = exercisesResult.rows;
+
+    // 4) Get reports for patient
+    const reportsResult = await pool.query(
+      `SELECT *
+       FROM reports
+       WHERE patient_id = $1`,
+      [req.params.pid]
+    );
+
+    const reports = reportsResult.rows;
+
+    // Group exercises by day_key
+    const exByDay = {};
+    exercises.forEach(ex => {
+      const dayKey = Number(ex.day_key);
+
+      if (!exByDay[dayKey]) exByDay[dayKey] = [];
+
+      let parsedIntervals = [];
+      try {
+        if (ex.intervals) {
+          parsedIntervals =
+            typeof ex.intervals === 'string'
+              ? JSON.parse(ex.intervals)
+              : ex.intervals;
+        }
+      } catch (e) {
+        parsedIntervals = [];
+      }
+
+      exByDay[dayKey].push({
+        instanceId: ex.instance_id,
+        type: ex.type,
+        name: ex.name,
+        image: ex.image,
+        description: ex.description,
+        equipment: ex.equipment,
+        sets: ex.sets,
+        reps: ex.reps,
+        duration: ex.duration,
+        notes: ex.notes,
+        rpe: ex.rpe,
+        imgData: ex.img_data,
+        imgUrl: ex.img_url,
+        link: ex.link,
+        intervals: parsedIntervals
+      });
+    });
+
+    // Build report map
+    const repMap = {};
+    reports.forEach(r => {
+      let parsedSessionRpe = null;
+      try {
+        if (r.session_rpe) {
+          parsedSessionRpe =
+            typeof r.session_rpe === 'string'
+              ? JSON.parse(r.session_rpe)
+              : r.session_rpe;
+        }
+      } catch (e) {
+        parsedSessionRpe = null;
+      }
+
+      repMap[Number(r.day_key)] = {
+        fatigue: r.fatigue,
+        pain: r.pain,
+        wellbeing: r.wellbeing,
+        notes: r.notes,
+        session_rpe: parsedSessionRpe
+      };
+    });
+
+    // Generate weeks array: week offsets -1 to +2
+    // day_key = weekOffset * 7 + dayOfWeek (base = Sunday of current week at server time)
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const wSun = new Date(now);
+    wSun.setDate(wSun.getDate() - wSun.getDay()); // Sunday of current week
+
+    const weekData = [];
+    for (let w = -1; w <= 2; w++) {
+      const sun = new Date(wSun);
+      sun.setDate(sun.getDate() + w * 7);
+
+      const days = [];
+      for (let d = 0; d < 7; d++) {
+        const date = new Date(sun);
+        date.setDate(date.getDate() + d);
+
+        const key = w * 7 + d;
+        const exs = (exByDay[key] || []).map(ex => {
+          const e = { ...ex };
+          if (e.imgData && e.imgData.length > 40000) delete e.imgData;
+          return e;
+        });
+
+        days.push({
+          date: date.toISOString().slice(0, 10),
+          dow: d,
+          key,
+          exs
+        });
+      }
+
+      weekData.push({
+        weekOffset: w,
+        sun: sun.toISOString().slice(0, 10),
+        days
+      });
+    }
+
+    const patData = JSON.stringify({
+      id: p.id,
+      name: p.name,
+      diagnosis: p.diagnosis || '',
+      gender: p.gender || '',
+      dob: p.dob || '',
+      therapistName: t ? t.name : ''
+    });
+
+    const planData = JSON.stringify(weekData);
+    const reportsData = JSON.stringify(repMap);
+
+    const html = generateStandaloneHTML(p, patData, planData, reportsData);
+    const safeName = (p.name || 'patient')
+      .toLowerCase()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9-]/g, '');
+
+    const fileName = safeName + '-oncomove.html';
+    const firstName = (p.name || '').split(' ')[0] || 'Patient';
+
+    const requestedWeekOffset = Number(req.body.weekOffset || 0);
+    const weekExs = exercises.filter(
+      e => Math.floor(Number(e.day_key) / 7) === requestedWeekOffset
+    );
+
+    const weekSummary =
+      weekExs.length > 0
+        ? `${weekExs.length} exercise(s) planned`
+        : 'rest week';
+
+    // Store in DB and return a shareable URL token
+    const token = crypto.randomBytes(16).toString('hex');
+
+    await pool.query(
+      `INSERT INTO share_pages
+        (token, patient_id, therapist_id, html, filename, first_name, week_summary)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (token)
+       DO UPDATE SET
+         patient_id = EXCLUDED.patient_id,
+         therapist_id = EXCLUDED.therapist_id,
+         html = EXCLUDED.html,
+         filename = EXCLUDED.filename,
+         first_name = EXCLUDED.first_name,
+         week_summary = EXCLUDED.week_summary,
+         updated_at = NOW()`,
+      [token, p.id, req.user.id, html, fileName, firstName, weekSummary]
+    );
+
+    // Also return html blob for Google Drive upload
+    res.json({
+      token,
+      html,
+      filename: fileName,
+      firstName,
+      weekSummary
+    });
+  } catch (err) {
+    console.error('share generate error:', err);
+    res.status(500).json({ error: 'Failed to generate share page' });
   }
-
-  const patData     = JSON.stringify({ id: p.id, name: p.name, diagnosis: p.diagnosis || '', gender: p.gender || '', dob: p.dob || '', therapistName: t ? t.name : '' });
-  const planData    = JSON.stringify(weekData);
-  const reportsData = JSON.stringify(repMap);
-
-  const html      = generateStandaloneHTML(p, patData, planData, reportsData);
-  const safeName  = p.name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-  const fileName  = safeName + '-oncomove.html';
-  const firstName = p.name.split(' ')[0];
-  const weekExs   = exercises.filter(e => Math.floor(e.day_key / 7) === (req.body.weekOffset || 0));
-  const weekSummary = weekExs.length > 0 ? `${weekExs.length} exercise(s) planned` : 'rest week';
-
-  // Store in DB and return a shareable URL token
-  const crypto = require('crypto');
-  const token  = crypto.randomBytes(16).toString('hex');
-  const db2    = require('../db');
-  db2.prepare('INSERT OR REPLACE INTO share_pages (token,patient_id,therapist_id,html,filename,first_name,week_summary) VALUES (?,?,?,?,?,?,?)')
-     .run(token, p.id, req.user.id, html, fileName, firstName, weekSummary);
-
-  // Also return html blob for Google Drive upload
-  res.json({ token, html, filename: fileName, firstName, weekSummary });
 });
 
 function generateStandaloneHTML(p, patData, planData, reportsData) {
@@ -253,17 +390,19 @@ function renderToday(main){
       if(done)totalDone++;
       const card=ce("div","ex-card"+(done?" done":""));
       const metaParts=[ex.sets&&ex.reps?ex.sets+"×"+ex.reps:ex.sets?ex.sets+" sets":ex.reps?ex.reps+" reps":"",ex.duration||"","RPE "+(ex.rpe??5)].filter(Boolean);
-      const imgEl=(ex.imgData||ex.imgUrl)?'<img class="ex-img" src="'+(ex.imgData||ex.imgUrl)+'" alt="'+ex.name+'" loading="lazy">'+'<div class="ex-emoji" style="background:'+m.bg+'">'+ex.image+'</div>'.replace('<div','<img class="ex-img"').replace('</div>',''):'<div class="ex-emoji" style="background:'+m.bg+'">'+ex.image+'</div>';
       const actualImgEl=(ex.imgData||ex.imgUrl)?'<img class="ex-img" src="'+(ex.imgData||ex.imgUrl)+'" alt="'+ex.name+'" loading="lazy">'  :'<div class="ex-emoji" style="background:'+m.bg+'">'+ex.image+'</div>';
       const chk=ce("button","ex-check"+(done?" done":""));
       chk.textContent=done?"✓":"";
       chk.onclick=()=>{ doneEx[ex.instanceId]=!done; renderToday(main); };
       const info2=ce("div","ex-info");
       info2.innerHTML='<div class="ex-name'+(done?" done":"")+'">'+ex.name+'</div><div class="ex-meta">'+metaParts.join(" · ")+'</div>'+(ex.description?'<div class="ex-desc">'+ex.description+'</div>':"")+((ex.intervals&&ex.intervals.length)?buildIvTable(ex,m):"")+(ex.link?'<a href="'+ex.link+'" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:3px;margin-top:4px;font-size:11px;color:var(--blue-l);font-weight:600;text-decoration:none">🔗 Reference ↗</a>':"");
-      const imgWrap=ce("div",""); imgWrap.innerHTML=actualImgEl;
+      const imgWrap=ce("div","");
+      imgWrap.innerHTML=actualImgEl;
       const imgNode=imgWrap.firstChild;
       imgNode.onclick=()=>openLightbox(ex,m);
-      card.appendChild(chk); card.appendChild(info2); card.appendChild(imgNode);
+      card.appendChild(chk);
+      card.appendChild(info2);
+      card.appendChild(imgNode);
       sec.appendChild(card);
     });
     main.appendChild(sec);
@@ -273,7 +412,11 @@ function renderToday(main){
   const pbar=ce("div","");
   pbar.style.cssText="text-align:center;padding:10px 0 4px;font-size:13px;color:var(--gray-500)";
   pbar.innerHTML=totalDone+"/"+total+" completed"+(totalDone===total&&total>0?' <span style="color:var(--green-l);font-weight:600">— Great work! 🎉</span>':"");
-  const bar=ce("div","prog-bar"); const fill=ce("div","prog-fill"); fill.style.width=(total?Math.round(totalDone/total*100):0)+"%"; bar.appendChild(fill); pbar.appendChild(bar);
+  const bar=ce("div","prog-bar");
+  const fill=ce("div","prog-fill");
+  fill.style.width=(total?Math.round(totalDone/total*100):0)+"%";
+  bar.appendChild(fill);
+  pbar.appendChild(bar);
   main.appendChild(pbar);
 }
 
@@ -294,6 +437,7 @@ function renderWeek(main){
   const hdr=ce("div","");
   hdr.innerHTML='<h2 style="font-size:20px;font-weight:800;margin-bottom:16px">This Week</h2>';
   main.appendChild(hdr);
+
   const week=thisWeek();
   week.days.forEach(day=>{
     const isToday=day.date===TODAY_ISO;
@@ -319,56 +463,137 @@ function renderCheckin(main){
     main.appendChild(box);
     return;
   }
+
   const hdr=ce("div","");
   hdr.innerHTML='<h2 style="font-size:20px;font-weight:800;margin-bottom:4px">Daily Check-in</h2><p style="color:var(--gray-400);font-size:13px;margin-bottom:18px">How are you feeling? Your therapist reviews these.</p>';
   main.appendChild(hdr);
+
   if(existing&&existing.submittedAt){
-    const notice=ce("div",""); notice.style.cssText="background:var(--green-bg);border:1px solid #86efac;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#166534";
+    const notice=ce("div","");
+    notice.style.cssText="background:var(--green-bg);border:1px solid #86efac;border-radius:10px;padding:11px 14px;margin-bottom:14px;font-size:13px;color:#166534";
     notice.textContent="✅ Already submitted today — you can update below.";
     main.appendChild(notice);
     rpeVals={fatigue:existing.fatigue??5,pain:existing.pain??3,wellbeing:existing.wellbeing??7};
   }
+
   const METRICS=[
     {k:"fatigue",  label:"Fatigue 😴",    desc:"How tired are you?",                color:"#f59e0b"},
     {k:"pain",     label:"Pain 😣",        desc:"How much pain or discomfort?",      color:"#ef4444"},
     {k:"wellbeing",label:"Wellbeing 🌟",   desc:"How are you feeling overall?",      color:"#10b981"},
   ];
+
   METRICS.forEach(m=>{
     const card=ce("div","metric-card");
-    const slid=ce("input","metric-slider"); slid.type="range"; slid.min=0; slid.max=10; slid.value=rpeVals[m.k]; slid.style.accentColor=m.color;
-    const valEl=ce("span","metric-val"); valEl.style.color=m.color; valEl.textContent=rpeVals[m.k];
-    const descEl=ce("span",""); descEl.style.cssText="font-size:12px;color:var(--gray-400)"; descEl.textContent=RPE[rpeVals[m.k]];
+    const slid=ce("input","metric-slider");
+    slid.type="range";
+    slid.min=0;
+    slid.max=10;
+    slid.value=rpeVals[m.k];
+    slid.style.accentColor=m.color;
+
+    const valEl=ce("span","metric-val");
+    valEl.style.color=m.color;
+    valEl.textContent=rpeVals[m.k];
+
+    const descEl=ce("span","");
+    descEl.style.cssText="font-size:12px;color:var(--gray-400)";
+    descEl.textContent=RPE[rpeVals[m.k]];
+
     const row=ce("div","metric-row");
-    const lbl=ce("div","metric-name"); lbl.textContent=m.label;
-    const rr=ce("div",""); rr.style.cssText="display:flex;align-items:baseline;gap:6px"; rr.appendChild(valEl); rr.appendChild(descEl); row.appendChild(lbl); row.appendChild(rr);
-    const desc2=ce("div","metric-desc"); desc2.textContent=m.desc;
-    const lbls=ce("div","metric-labels"); lbls.innerHTML="<span>0 Nothing</span><span>10 Maximum</span>";
-    card.appendChild(row); card.appendChild(desc2); card.appendChild(slid); card.appendChild(lbls);
-    slid.oninput=()=>{ rpeVals[m.k]=+slid.value; valEl.textContent=slid.value; descEl.textContent=RPE[+slid.value]||""; };
+    const lbl=ce("div","metric-name");
+    lbl.textContent=m.label;
+
+    const rr=ce("div","");
+    rr.style.cssText="display:flex;align-items:baseline;gap:6px";
+    rr.appendChild(valEl);
+    rr.appendChild(descEl);
+    row.appendChild(lbl);
+    row.appendChild(rr);
+
+    const desc2=ce("div","metric-desc");
+    desc2.textContent=m.desc;
+
+    const lbls=ce("div","metric-labels");
+    lbls.innerHTML="<span>0 Nothing</span><span>10 Maximum</span>";
+
+    card.appendChild(row);
+    card.appendChild(desc2);
+    card.appendChild(slid);
+    card.appendChild(lbls);
+
+    slid.oninput=()=>{
+      rpeVals[m.k]=+slid.value;
+      valEl.textContent=slid.value;
+      descEl.textContent=RPE[+slid.value]||"";
+    };
+
     main.appendChild(card);
   });
+
   const notesCard=ce("div","metric-card");
-  const notesLabel=ce("div",""); notesLabel.innerHTML="<label style='font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px'>Notes (optional)</label>";
-  const notesTA=ce("textarea",""); notesTA.rows=3; notesTA.placeholder="How did the exercises feel? Any discomfort?"; notesTA.style.cssText="width:100%;padding:10px 12px;border:1px solid var(--gray-200);border-radius:8px;font-size:14px;font-family:var(--font);outline:none;resize:vertical"; notesTA.value=existing?.notes||"";
-  notesCard.appendChild(notesLabel); notesCard.appendChild(notesTA);
+  const notesLabel=ce("div","");
+  notesLabel.innerHTML="<label style='font-size:12px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:6px'>Notes (optional)</label>";
+
+  const notesTA=ce("textarea","");
+  notesTA.rows=3;
+  notesTA.placeholder="How did the exercises feel? Any discomfort?";
+  notesTA.style.cssText="width:100%;padding:10px 12px;border:1px solid var(--gray-200);border-radius:8px;font-size:14px;font-family:var(--font);outline:none;resize:vertical";
+  notesTA.value=existing?.notes||"";
+
+  notesCard.appendChild(notesLabel);
+  notesCard.appendChild(notesTA);
   main.appendChild(notesCard);
-  const btn=ce("button","submit-btn"); btn.textContent="✅ Submit Check-in";
-  btn.onclick=()=>{ localReports[TODAY_ISO]={...rpeVals,notes:notesTA.value,submittedAt:new Date().toISOString(),_locked:true}; saveRpts(); renderCheckin(main); };
+
+  const btn=ce("button","submit-btn");
+  btn.textContent="✅ Submit Check-in";
+  btn.onclick=()=>{
+    localReports[TODAY_ISO]={
+      ...rpeVals,
+      notes:notesTA.value,
+      submittedAt:new Date().toISOString(),
+      _locked:true
+    };
+    saveRpts();
+    renderCheckin(main);
+  };
   main.appendChild(btn);
 }
 
 function openLightbox(ex,m){
   const ov=ce("div","lightbox");
   const hasImg=ex.imgData||ex.imgUrl;
-  ov.innerHTML='<div class="lightbox-inner">'+(hasImg?'<img src="'+(ex.imgData||ex.imgUrl)+'" style="max-width:360px;max-height:360px;object-fit:contain;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)" alt="'+ex.name+'">'  :'<div style="font-size:130px;line-height:1">'+ex.image+'</div>')+'<div style="color:#fff;font-size:22px;font-weight:700">'+ex.name+'</div><span style="font-size:13px;font-weight:600;padding:4px 14px;border-radius:20px;background:'+m.bg+';color:'+m.color+'">'+m.label+'</span>'+(ex.description?'<div style="color:rgba(255,255,255,.65);font-size:15px;max-width:340px;text-align:center;line-height:1.5">'+ex.description+'</div>':'')+'<div style="color:rgba(255,255,255,.4);font-size:13px;margin-top:6px">Click anywhere to close</div></div>';
+  ov.innerHTML='<div class="lightbox-inner">'+
+    (hasImg
+      ? '<img src="'+(ex.imgData||ex.imgUrl)+'" style="max-width:360px;max-height:360px;object-fit:contain;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)" alt="'+ex.name+'">'
+      : '<div style="font-size:130px;line-height:1">'+ex.image+'</div>')+
+    '<div style="color:#fff;font-size:22px;font-weight:700">'+ex.name+'</div>'+
+    '<span style="font-size:13px;font-weight:600;padding:4px 14px;border-radius:20px;background:'+m.bg+';color:'+m.color+'">'+m.label+'</span>'+
+    (ex.description?'<div style="color:rgba(255,255,255,.65);font-size:15px;max-width:340px;text-align:center;line-height:1.5">'+ex.description+'</div>':'')+
+    '<div style="color:rgba(255,255,255,.4);font-size:13px;margin-top:6px">Click anywhere to close</div></div>';
+
   ov.onclick=()=>ov.remove();
   document.body.appendChild(ov);
-  const onKey=e=>{ if(e.key==="Escape"){ ov.remove(); document.removeEventListener("keydown",onKey); } };
+
+  const onKey=e=>{
+    if(e.key==="Escape"){
+      ov.remove();
+      document.removeEventListener("keydown",onKey);
+    }
+  };
   document.addEventListener("keydown",onKey);
 }
 
-function ce(tag,cls){ const e=document.createElement(tag); if(cls)e.className=cls; return e; }
-function emptyState(icon,title,sub){ const d=ce("div","empty-state"); d.innerHTML='<div class="empty-icon">'+icon+'</div><div style="font-size:16px;font-weight:600;color:var(--gray-600);margin-bottom:4px">'+title+'</div><p style="font-size:13px">'+sub+'</p>'; return d; }
+function ce(tag,cls){
+  const e=document.createElement(tag);
+  if(cls)e.className=cls;
+  return e;
+}
+
+function emptyState(icon,title,sub){
+  const d=ce("div","empty-state");
+  d.innerHTML='<div class="empty-icon">'+icon+'</div><div style="font-size:16px;font-weight:600;color:var(--gray-600);margin-bottom:4px">'+title+'</div><p style="font-size:13px">'+sub+'</p>';
+  return d;
+}
 
 render();
 ${CLOSE}
@@ -377,13 +602,27 @@ ${CLOSE}
 }
 
 // ── Public: serve stored patient page ────────────────────────────────────────
-router.get('/p/:token', (req, res) => {
-  const db2 = require('../db');
-  const row = db2.prepare('SELECT html FROM share_pages WHERE token=?').get(req.params.token);
-  if (!row) return res.status(404).send('<h1>Program not found or expired</h1>');
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(row.html);
-});
+router.get('/p/:token', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT html
+       FROM share_pages
+       WHERE token = $1`,
+      [req.params.token]
+    );
 
+    const row = result.rows[0];
+
+    if (!row) {
+      return res.status(404).send('<h1>Program not found or expired</h1>');
+    }
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(row.html);
+  } catch (err) {
+    console.error('share public page error:', err);
+    res.status(500).send('<h1>Server error</h1>');
+  }
+});
 
 module.exports = router;

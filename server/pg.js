@@ -1,14 +1,13 @@
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 async function initDB() {
+  // patients
   await pool.query(`
     CREATE TABLE IF NOT EXISTS patients (
       id TEXT PRIMARY KEY,
@@ -30,6 +29,7 @@ async function initDB() {
     );
   `);
 
+  // exercises
   await pool.query(`
     CREATE TABLE IF NOT EXISTS exercises (
       id TEXT PRIMARY KEY,
@@ -58,7 +58,61 @@ async function initDB() {
     );
   `);
 
-  console.log('✅ Tables ready (patients + exercises)');
+  // therapists
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS therapists (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT UNIQUE,
+      password TEXT,
+      reset_token TEXT,
+      reset_exp TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // make sure missing columns are added even if table already existed
+  await pool.query(`
+    ALTER TABLE therapists
+    ADD COLUMN IF NOT EXISTS reset_token TEXT;
+  `);
+
+  await pool.query(`
+    ALTER TABLE therapists
+    ADD COLUMN IF NOT EXISTS reset_exp TEXT;
+  `);
+
+  // reports
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      day_key INTEGER NOT NULL,
+      fatigue INTEGER,
+      pain INTEGER,
+      wellbeing INTEGER,
+      notes TEXT,
+      session_rpe TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // share_pages
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS share_pages (
+      token TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      therapist_id TEXT NOT NULL,
+      html TEXT NOT NULL,
+      filename TEXT,
+      first_name TEXT,
+      week_summary TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  console.log('✅ Tables ready (patients + exercises + therapists + reports + share_pages)');
 }
 
 async function testPgConnection() {
