@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { TYPE_META, RPE, INTENSITY_OPTIONS } from '../../constants';
 import { uid } from '../../utils/calendar';
 
@@ -45,6 +45,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 const [mode, setMode] = useState('custom');
   const [form, setForm] = useState(initial ? { ...initial, intervals: initial.intervals ? JSON.parse(initial.intervals) : [] } : blankFor(tab));
   const [imgLoading, setImgLoading] = useState(false);
+  const fileInputRef = useRef(null);
 
   function switchTab(t) {
     setTab(t);
@@ -212,11 +213,39 @@ const [mode, setMode] = useState('custom');
               {form.img_data && (
                 <div style={{ marginBottom: 8 }}>
                   <img src={form.img_data} alt="exercise" style={{ maxHeight: 120, borderRadius: 8, display: 'block', marginBottom: 4 }} />
-                  <button className="link-btn danger" onClick={() => set('img_data', '')}>Remove image</button>
                 </div>
               )}
-              <input type="file" accept="image/*" onChange={handleImg} disabled={imgLoading} />
-              {imgLoading && <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>Uploading…</span>}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleImg}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ fontSize: 13 }}
+                  disabled={imgLoading}
+                  onClick={() => fileInputRef.current.click()}
+                >
+                  {imgLoading ? 'Loading…' : 'Choose image'}
+                </button>
+                <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
+                  {form.img_data ? 'Image selected' : 'No file chosen'}
+                </span>
+                {form.img_data && (
+                  <button
+                    type="button"
+                    className="link-btn danger"
+                    style={{ fontSize: 12 }}
+                    onClick={() => { set('img_data', ''); set('img_url', ''); }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
