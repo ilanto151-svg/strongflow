@@ -211,20 +211,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             <div className="form-row">
               <label className="form-label">Image</label>
 
-              <input
-                id="exercise-image-upload"
-                type="file"
-                accept="image/*"
-                onChange={handleImg}
-                style={{
-                  position: 'absolute',
-                  left: '-9999px',
-                  width: '1px',
-                  height: '1px',
-                  opacity: 0,
-                }}
-              />
-
               {form.img_data && (
                 <div style={{ marginBottom: 8 }}>
                   <img
@@ -236,16 +222,45 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {/*
+                  The input is nested INSIDE the label and covers it with position:absolute inset:0.
+                  This keeps the input within the label's visible bounds, so it is never clipped
+                  by .modal { overflow: hidden } — which was the root cause of all previous failures.
+                  The user's click lands directly on the input; no ref.click() or htmlFor needed.
+                */}
                 <label
-                  htmlFor="exercise-image-upload"
                   className="btn btn-ghost"
-                  style={{ fontSize: 13, cursor: imgLoading ? 'not-allowed' : 'pointer', opacity: imgLoading ? 0.6 : 1 }}
+                  style={{
+                    fontSize: 13,
+                    cursor: imgLoading ? 'not-allowed' : 'pointer',
+                    opacity: imgLoading ? 0.6 : 1,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                  }}
                 >
                   {imgLoading ? 'Loading…' : 'Choose image'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={imgLoading}
+                    onChange={handleImg}
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      opacity: 0,
+                      cursor: 'pointer',
+                      width: '100%',
+                      height: '100%',
+                    }}
+                  />
                 </label>
+
                 <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                   {form.img_data ? 'Image selected' : 'No file chosen'}
                 </span>
+
                 {form.img_data && (
                   <button
                     type="button"
