@@ -222,44 +222,107 @@ async function initDB() {
     );
   `);
 
+  // patient_treatments
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS patient_treatments (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      treatment_type TEXT DEFAULT '',
+      frequency_value INTEGER DEFAULT 1,
+      frequency_unit TEXT DEFAULT 'weeks',
+      start_date TEXT,
+      last_treatment_date TEXT,
+      notes TEXT DEFAULT '',
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // treatment_reminder_rules
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS treatment_reminder_rules (
+      id TEXT PRIMARY KEY,
+      treatment_id TEXT NOT NULL,
+      trigger_type TEXT NOT NULL,
+      offset_value INTEGER DEFAULT 0,
+      offset_unit TEXT DEFAULT 'days',
+      message TEXT DEFAULT '',
+      repeat_each_cycle BOOLEAN DEFAULT TRUE,
+      is_active BOOLEAN DEFAULT TRUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  // treatment_reminder_occurrences
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS treatment_reminder_occurrences (
+      id TEXT PRIMARY KEY,
+      rule_id TEXT NOT NULL,
+      occurrence_date TEXT NOT NULL,
+      dismissed_at TIMESTAMP,
+      UNIQUE(rule_id, occurrence_date)
+    );
+  `);
+
   // ===== INDEXES =====
 
-// exercises
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_exercises_patient_day
-  ON exercises(patient_id, day_key);
-`);
+  // exercises
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_exercises_patient_day
+    ON exercises(patient_id, day_key);
+  `);
 
-// reports
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_reports_patient
-  ON reports(patient_id);
-`);
+  // reports
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_reports_patient
+    ON reports(patient_id);
+  `);
 
-// patients
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_patients_therapist
-  ON patients(therapist_id);
-`);
+  // patients
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_patients_therapist
+    ON patients(therapist_id);
+  `);
 
-// share pages
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_share_pages_patient
-  ON share_pages(patient_id);
-`);
+  // share_pages
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_share_pages_patient
+    ON share_pages(patient_id);
+  `);
 
-// events
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_patient_events_patient
-  ON patient_events(patient_id);
-`);
+  // patient_events
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_patient_events_patient
+    ON patient_events(patient_id);
+  `);
 
-await pool.query(`
-  CREATE INDEX IF NOT EXISTS idx_patient_event_occurrences_event
-  ON patient_event_occurrences(event_id);
-`);
+  // patient_event_occurrences
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_patient_event_occurrences_event
+    ON patient_event_occurrences(event_id);
+  `);
 
-console.log('✅ Tables ready');
+  // patient_treatments
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_patient_treatments_patient
+    ON patient_treatments(patient_id);
+  `);
+
+  // treatment_reminder_rules
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_treatment_reminder_rules_treatment
+    ON treatment_reminder_rules(treatment_id);
+  `);
+
+  // treatment_reminder_occurrences
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_treatment_reminder_occurrences_rule
+    ON treatment_reminder_occurrences(rule_id);
+  `);
+
+  console.log('✅ Tables ready');
+}
 
 // ===== TEST CONNECTION =====
 async function testPgConnection() {
