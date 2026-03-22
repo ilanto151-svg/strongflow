@@ -225,3 +225,107 @@ router.get('/:pid/reminders', authTherapist, async (req, res) => {
 });
 
 module.exports = router;
+// UPDATE treatment
+router.put('/:pid/:tid', authTherapist, async (req, res) => {
+  if (!(await canAccess(req.user.id, req.params.pid)))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  const b = req.body;
+
+  await pool.query(`
+    UPDATE patient_treatments SET
+      name=$1,
+      treatment_type=$2,
+      frequency_value=$3,
+      frequency_unit=$4,
+      start_date=$5,
+      last_treatment_date=$6,
+      notes=$7,
+      is_active=$8
+    WHERE id=$9 AND patient_id=$10
+  `, [
+    b.name,
+    b.treatment_type || '',
+    b.frequency_value || 1,
+    b.frequency_unit || 'weeks',
+    b.start_date,
+    b.last_treatment_date || null,
+    b.notes || '',
+    b.is_active !== false,
+    req.params.tid,
+    req.params.pid
+  ]);
+
+  res.json({ ok: true });
+});
+
+// DELETE treatment
+router.delete('/:pid/:tid', authTherapist, async (req, res) => {
+  if (!(await canAccess(req.user.id, req.params.pid)))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  await pool.query(
+    'DELETE FROM patient_treatments WHERE id=$1 AND patient_id=$2',
+    [req.params.tid, req.params.pid]
+  );
+
+  res.json({ ok: true });
+});
+
+// ADD RULE
+router.post('/:pid/:tid/rules', authTherapist, async (req, res) => {
+  if (!(await canAccess(req.user.id, req.params.pid)))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  const b = req.body;
+  const id = 'rr_' + crypto.randomUUID().slice(0, 8);
+
+  await pool.query(`
+    INSERT INTO treatment_reminder_rules
+    (id, treatment_id, trigger_type, offset_value, offset_unit, message, repeat_each_cycle, is_active)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+  `, [
+    id,
+    req.params.tid,
+    b.trigger_type || 'after',
+    b.offset_value || 0,
+    b.offset_unit || 'days',
+    b.message || '',
+    b.repeat_each_cycle !== false,
+    true
+  ]);
+
+  res.json({ ok: true });
+});
+
+// DELETE RULE
+router.delete('/:pid/:tid/rules/:rid', authTherapist, async (req, res) => {
+  if (!(await canAccess(req.user.id, req.params.pid)))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  await pool.query(
+    'DELETE FROM treatment_reminder_rules WHERE id=$1 AND treatment_id=$2',
+    [req.params.rid, req.params.tid]
+  );
+
+  res.json({ ok: true });
+});
+
+// DISMISS reminder
+router.post('/:pid/dismiss', authTherapist, async (req, res) => {
+  if (!(await canAccess(req.user.id, req.params.pid)))
+    return res.status(403).json({ error: 'Forbidden' });
+
+  const { rule_id, occurrence_date } = req.body;
+  const id = 'occ_' + crypto.randomUUID().slice(0, 8);
+
+  await pool.query(`
+    INSERT INTO treatment_reminder_occurrences
+    (id, rule_id, occurrence_date, dismissed_at)
+    VALUES ($1,$2,$3,NOW())
+    ON CONFLICT (rule_id, occurrence_date)
+    DO UPDATE SET dismissed_at=NOW()
+  `, [id, rule_id, occurrence_date]);
+
+  res.json({ ok: true });
+});
