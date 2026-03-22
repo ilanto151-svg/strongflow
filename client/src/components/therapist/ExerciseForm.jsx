@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { TYPE_META, RPE, INTENSITY_OPTIONS } from '../../constants';
 import { uid } from '../../utils/calendar';
 
@@ -47,7 +47,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   const [mode, setMode] = useState('custom');
   const [form, setForm] = useState(initial ? { ...initial, intervals: initial.intervals ? JSON.parse(initial.intervals) : [] } : blankFor(tab));
   const [imgLoading, setImgLoading] = useState(false);
-  const fileInputRef = useRef(null);
 
   function switchTab(t) {
     setTab(t);
@@ -71,16 +70,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
       e.target.value = '';
     }
   }
-
- function handleChooseImage() {
-  if (!fileInputRef.current) {
-    console.log('file input not found');
-    return;
-  }
-
-  console.log('opening file picker...');
-  fileInputRef.current.click();
-}
 
   function handleRemoveImage(e) {
     e.preventDefault();
@@ -111,23 +100,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
   return (
     <div>
-      {/* Always-mounted hidden file input — positioned off-screen so Safari allows programmatic .click() */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        tabIndex={-1}
-        aria-hidden="true"
-        onChange={handleImg}
-        style={{
-          position: 'absolute',
-          left: '-9999px',
-          width: '1px',
-          height: '1px',
-          opacity: 0,
-        }}
-      />
-
       {/* Type tabs */}
       {!editing && (
         <div className="type-tabs">
@@ -239,6 +211,20 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             <div className="form-row">
               <label className="form-label">Image</label>
 
+              <input
+                id="exercise-image-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleImg}
+                style={{
+                  position: 'absolute',
+                  left: '-9999px',
+                  width: '1px',
+                  height: '1px',
+                  opacity: 0,
+                }}
+              />
+
               {form.img_data && (
                 <div style={{ marginBottom: 8 }}>
                   <img
@@ -250,15 +236,13 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               )}
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <button
-                  type="button"
+                <label
+                  htmlFor="exercise-image-upload"
                   className="btn btn-ghost"
-                  style={{ fontSize: 13 }}
-                  disabled={imgLoading}
-                  onClick={handleChooseImage}
+                  style={{ fontSize: 13, cursor: imgLoading ? 'not-allowed' : 'pointer', opacity: imgLoading ? 0.6 : 1 }}
                 >
                   {imgLoading ? 'Loading…' : 'Choose image'}
-                </button>
+                </label>
                 <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>
                   {form.img_data ? 'Image selected' : 'No file chosen'}
                 </span>
