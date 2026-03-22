@@ -236,12 +236,6 @@ await pool.query(`
   ON reports(patient_id);
 `);
 
-// 🔥 חשוב — למנוע כפילויות דיווחים לאותו יום
-await pool.query(`
-  CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_patient_day_unique
-  ON reports(patient_id, day_key);
-`);
-
 // patients
 await pool.query(`
   CREATE INDEX IF NOT EXISTS idx_patients_therapist
