@@ -68,7 +68,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
       setForm(f => ({ ...f, img_data: b64, img_url: '' }));
     } finally {
       setImgLoading(false);
-      // reset so same file can be re-selected
       e.target.value = '';
     }
   }
@@ -76,9 +75,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   function handleChooseImage(e) {
     e.preventDefault();
     e.stopPropagation();
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+    fileInputRef.current?.click();
   }
 
   function handleRemoveImage(e) {
@@ -110,11 +107,28 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
   return (
     <div>
+      {/* Always-mounted hidden file input — positioned off-screen so Safari allows programmatic .click() */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleImg}
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+        }}
+      />
+
       {/* Type tabs */}
       {!editing && (
         <div className="type-tabs">
           {Object.entries(TYPE_META).map(([k, m]) => (
-            <button key={k} className={`type-tab${tab === k ? ' active' : ''}`} onClick={() => switchTab(k)}>
+            <button type="button" key={k} className={`type-tab${tab === k ? ' active' : ''}`} onClick={() => switchTab(k)}>
               {m.icon} {m.label}
             </button>
           ))}
@@ -122,11 +136,10 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
       )}
 
       <div style={{ padding: editing ? 0 : '18px 0 0' }}>
-        {/* Custom form */}
         {(mode === 'custom' || editing) && (
           <div>
             {!editing && (
-              <button className="link-btn" style={{ marginBottom: 12 }} onClick={() => setMode('library')}>← Back to library</button>
+              <button type="button" className="link-btn" style={{ marginBottom: 12 }} onClick={() => setMode('library')}>← Back to library</button>
             )}
             <div className="form-row">
               <label className="form-label">Exercise Name *</label>
@@ -190,12 +203,12 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                         <td><input type="text" value={row.duration} onChange={e => setInterval(row.id, 'duration', e.target.value)} placeholder="e.g. 2 min" /></td>
                         <td><input type="number" min="0" max="10" value={row.rpe} onChange={e => setInterval(row.id, 'rpe', e.target.value)} /></td>
                         <td><input type="text" value={row.target_hr || ''} onChange={e => setInterval(row.id, 'target_hr', e.target.value)} placeholder="e.g. 120–140" style={{ width: 90 }} /></td>
-                        <td><button className="int-del-btn" onClick={() => delInterval(row.id)}>✕</button></td>
+                        <td><button type="button" className="int-del-btn" onClick={() => delInterval(row.id)}>✕</button></td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                <button className="add-interval-btn" onClick={addInterval}>+ Add interval</button>
+                <button type="button" className="add-interval-btn" onClick={addInterval}>+ Add interval</button>
               </div>
             )}
 
@@ -221,24 +234,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
             <div className="form-row">
               <label className="form-label">Image</label>
-
-              {/* Hidden file input — opacity:0 + position:absolute avoids Safari blocking programmatic clicks on display:none inputs */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                tabIndex={-1}
-                aria-hidden="true"
-                onChange={handleImg}
-                style={{
-                  opacity: 0,
-                  position: 'absolute',
-                  width: '1px',
-                  height: '1px',
-                  overflow: 'hidden',
-                  pointerEvents: 'none',
-                }}
-              />
 
               {form.img_data && (
                 <div style={{ marginBottom: 8 }}>
@@ -281,8 +276,8 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
       {(mode === 'custom' || editing) && (
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--gray-200)', marginTop: 8 }}>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={handleSave}>
             {editing ? 'Save Changes' : 'Add Exercise'}
           </button>
         </div>
