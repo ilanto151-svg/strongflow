@@ -1,12 +1,16 @@
 // server/routes/reports.js
 const router = require('express').Router();
-const db     = require('../db');
+const { pool } = require('../pg');
 const crypto = require('crypto');
-const { authAny, authPatient } = require('../middleware/auth');
+const { authAny } = require('../middleware/auth');
 
-function canAccess(user, pid) {
+async function canAccess(user, pid) {
   if (user.role === 'therapist') {
-    return db.prepare('SELECT id FROM patients WHERE id=? AND therapist_id=?').get(pid, user.id);
+    const { rows } = await pool.query(
+      'SELECT id FROM patients WHERE id = $1 AND therapist_id = $2 LIMIT 1',
+      [pid, user.id]
+    );
+    return rows.length > 0;
   }
   return user.id === pid;
 }
@@ -21,56 +25,111 @@ function parseReport(r) {
     notes: r.notes,
     session_rpe: r.session_rpe ? JSON.parse(r.session_rpe) : {},
     session_data: r.session_data ? JSON.parse(r.session_data) : {},
-    submitted_at: r.submitted_at
+    submitted_at: r.submitted_at || r.created_at || null,
+  };
+}
+
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
   };
 }
 
 // GET /reports/:pid — flat array of reports
-router.get('/:pid', authAny, (req, res) => {
-  if (!canAccess(req.user, req.params.pid)) return res.status(403).json({ error: 'Forbidden' });
-  const rows = db.prepare('SELECT * FROM reports WHERE patient_id=? ORDER BY day_key').all(req.params.pid);
-  res.json(rows.map(parseReport));
-});
+router.get(
+  '/:pid',
+  authAny,
+  asyncHandler(async (req, res) => {
+    if (!(await canAccess(req.user, req.params.pid))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { rows } = await pool.query(
+      'SELECT * FROM reports WHERE patient_id = $1 ORDER BY day_key',
+      [req.params.pid]
+    );
+
+    res.json(rows.map(parseReport));
+  })
+);
 
 // POST /reports/:pid — submit/update a report
-router.post('/:pid', authAny, (req, res) => {
-  if (!canAccess(req.user, req.params.pid)) {
-    return res.status(403).json({ error: 'Forbidden' });
-  }
+router.post(
+  '/:pid',
+  authAny,
+  asyncHandler(async (req, res) => {
+    if (!(await canAccess(req.user, req.params.pid))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
 
-  const pid = req.params.pid;
-  const { day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data } = req.body;
+    const pid = req.params.pid;
+    const { day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data } = req.body;
 
-  const existing = db.prepare('SELECT * FROM reports WHERE patient_id=? AND day_key=?').get(pid, day_key);
-
-  if (existing) {
-    const nextFatigue    = fatigue      !== undefined ? fatigue      : existing.fatigue;
-    const nextPain       = pain         !== undefined ? pain         : existing.pain;
-    const nextWellbeing  = wellbeing    !== undefined ? wellbeing    : existing.wellbeing;
-    const nextNotes      = notes        !== undefined ? notes        : existing.notes;
-    const nextSessionRpe = session_rpe  !== undefined ? JSON.stringify(session_rpe)  : existing.session_rpe;
-    const nextSessionData = session_data !== undefined ? JSON.stringify(session_data) : existing.session_data;
-
-    db.prepare(`
-      UPDATE reports
-      SET fatigue=?, pain=?, wellbeing=?, notes=?, session_rpe=?, session_data=?, submitted_at=datetime('now')
-      WHERE patient_id=? AND day_key=?
-    `).run(nextFatigue, nextPain, nextWellbeing, nextNotes, nextSessionRpe, nextSessionData, pid, day_key);
-  } else {
-    const id = 'r_' + crypto.randomUUID().slice(0, 8);
-
-    db.prepare(`
-      INSERT INTO reports (id, patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      id, pid, day_key,
-      fatigue ?? null, pain ?? null, wellbeing ?? null,
-      notes ?? '',
-      session_rpe  !== undefined ? JSON.stringify(session_rpe)  : null,
-      session_data !== undefined ? JSON.stringify(session_data) : null
+    const existingResult = await pool.query(
+      'SELECT * FROM reports WHERE patient_id = $1 AND day_key = $2 LIMIT 1',
+      [pid, day_key]
     );
-  }
 
-  res.json({ ok: true });
-});
+    if (existingResult.rows.length > 0) {
+      const existing = existingResult.rows[0];
+
+      const nextFatigue = fatigue !== undefined ? fatigue : existing.fatigue;
+      const nextPain = pain !== undefined ? pain : existing.pain;
+      const nextWellbeing = wellbeing !== undefined ? wellbeing : existing.wellbeing;
+      const nextNotes = notes !== undefined ? notes : existing.notes;
+      const nextSessionRpe =
+        session_rpe !== undefined ? JSON.stringify(session_rpe) : existing.session_rpe;
+      const nextSessionData =
+        session_data !== undefined ? JSON.stringify(session_data) : existing.session_data;
+
+      await pool.query(
+        `
+        UPDATE reports
+        SET fatigue = $1,
+            pain = $2,
+            wellbeing = $3,
+            notes = $4,
+            session_rpe = $5,
+            session_data = $6,
+            created_at = CURRENT_TIMESTAMP
+        WHERE patient_id = $7 AND day_key = $8
+        `,
+        [
+          nextFatigue,
+          nextPain,
+          nextWellbeing,
+          nextNotes,
+          nextSessionRpe,
+          nextSessionData,
+          pid,
+          day_key,
+        ]
+      );
+    } else {
+      const id = 'r_' + crypto.randomUUID().slice(0, 8);
+
+      await pool.query(
+        `
+        INSERT INTO reports
+        (id, patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+        `,
+        [
+          id,
+          pid,
+          day_key,
+          fatigue ?? null,
+          pain ?? null,
+          wellbeing ?? null,
+          notes ?? '',
+          session_rpe !== undefined ? JSON.stringify(session_rpe) : null,
+          session_data !== undefined ? JSON.stringify(session_data) : null,
+        ]
+      );
+    }
+
+    res.json({ ok: true });
+  })
+);
+
 module.exports = router;
