@@ -72,11 +72,15 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
     }
   }
 
-  function handleChooseImage(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    fileInputRef.current?.click();
+ function handleChooseImage() {
+  if (!fileInputRef.current) {
+    console.log('file input not found');
+    return;
   }
+
+  console.log('opening file picker...');
+  fileInputRef.current.click();
+}
 
   function handleRemoveImage(e) {
     e.preventDefault();
