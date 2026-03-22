@@ -13,8 +13,9 @@ const BLANK_RES = {
   weight: '',
   rest: '',
   body_area: ''
-};const BLANK_AER = { type:'aerobic',    name:'', image:'', description:'', equipment:'', duration:'', notes:'', img_data:'', img_url:'', link:'', intervals:[] };
-const BLANK_OTH = { type:'other',      name:'', image:'', description:'', equipment:'', duration:'', rpe:'', notes:'', img_data:'', img_url:'', link:'' };
+};
+const BLANK_AER = { type: 'aerobic',    name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '', intervals: [] };
+const BLANK_OTH = { type: 'other',      name: '', image: '', description: '', equipment: '', duration: '', rpe: '', notes: '', img_data: '', img_url: '', link: '' };
 const BODY_AREAS = [
   'רגליים',
   'חזה',
@@ -24,6 +25,7 @@ const BODY_AREAS = [
   'יד אחורית',
   'בטן'
 ];
+
 function blankFor(t) {
   if (t === 'resistance') return { ...BLANK_RES };
   if (t === 'aerobic')    return { ...BLANK_AER, intervals: [] };
@@ -42,7 +44,7 @@ function fileToBase64(file) {
 export default function ExerciseForm({ initial, onSave, onClose }) {
   const editing = !!initial;
   const [tab,  setTab]  = useState(initial?.type || 'resistance');
-const [mode, setMode] = useState('custom');
+  const [mode, setMode] = useState('custom');
   const [form, setForm] = useState(initial ? { ...initial, intervals: initial.intervals ? JSON.parse(initial.intervals) : [] } : blankFor(tab));
   const [imgLoading, setImgLoading] = useState(false);
   const fileInputRef = useRef(null);
@@ -51,12 +53,9 @@ const [mode, setMode] = useState('custom');
     setTab(t);
     if (!editing) {
       setForm(blankFor(t));
-     setMode('custom');
+      setMode('custom');
     }
   }
-
-  
-
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
 
@@ -66,8 +65,26 @@ const [mode, setMode] = useState('custom');
     setImgLoading(true);
     try {
       const b64 = await fileToBase64(file);
-      set('img_data', b64);
-    } finally { setImgLoading(false); }
+      setForm(f => ({ ...f, img_data: b64, img_url: '' }));
+    } finally {
+      setImgLoading(false);
+      // reset so same file can be re-selected
+      e.target.value = '';
+    }
+  }
+
+  function handleChooseImage(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }
+
+  function handleRemoveImage(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setForm(f => ({ ...f, img_data: '', img_url: '' }));
   }
 
   // ── Intervals (aerobic) ───────────────────────────────────────────────────
@@ -90,8 +107,6 @@ const [mode, setMode] = useState('custom');
     };
     onSave(saved);
   }
-
-  const meta = TYPE_META[tab];
 
   return (
     <div>
@@ -136,19 +151,15 @@ const [mode, setMode] = useState('custom');
                 <div className="form-row"><label className="form-label">Reps</label><input className="form-input" type="number" min="1" value={form.reps || ''} onChange={e => set('reps', e.target.value)} /></div>
                 <div className="form-row"><label className="form-label">Weight</label><input className="form-input" value={form.weight || ''} onChange={e => set('weight', e.target.value)} placeholder="kg / lb" /></div>
                 <div className="form-row"><label className="form-label">Rest</label><input className="form-input" value={form.rest || ''} onChange={e => set('rest', e.target.value)} placeholder="e.g. 60s" /></div>
-             <div className="form-row">
-  <label className="form-label">אזור בגוף</label>
-  <select
-    className="form-input"
-    value={form.body_area || ''}
-    onChange={(e) => set('body_area', e.target.value)}
-  >
-    <option value="">בחר אזור</option>
-    {BODY_AREAS.map((area) => (
-      <option key={area} value={area}>{area}</option>
-    ))}
-  </select>
-</div>
+                <div className="form-row">
+                  <label className="form-label">אזור בגוף</label>
+                  <select className="form-input" value={form.body_area || ''} onChange={e => set('body_area', e.target.value)}>
+                    <option value="">בחר אזור</option>
+                    {BODY_AREAS.map(area => (
+                      <option key={area} value={area}>{area}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             )}
 
@@ -210,25 +221,42 @@ const [mode, setMode] = useState('custom');
 
             <div className="form-row">
               <label className="form-label">Image</label>
-              {form.img_data && (
-                <div style={{ marginBottom: 8 }}>
-                  <img src={form.img_data} alt="exercise" style={{ maxHeight: 120, borderRadius: 8, display: 'block', marginBottom: 4 }} />
-                </div>
-              )}
+
+              {/* Hidden file input — opacity:0 + position:absolute avoids Safari blocking programmatic clicks on display:none inputs */}
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                style={{ display: 'none' }}
+                tabIndex={-1}
+                aria-hidden="true"
                 onChange={handleImg}
+                style={{
+                  opacity: 0,
+                  position: 'absolute',
+                  width: '1px',
+                  height: '1px',
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+
+              {form.img_data && (
+                <div style={{ marginBottom: 8 }}>
+                  <img
+                    src={form.img_data}
+                    alt="exercise preview"
+                    style={{ maxHeight: 120, borderRadius: 8, display: 'block', marginBottom: 4 }}
+                  />
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   className="btn btn-ghost"
                   style={{ fontSize: 13 }}
                   disabled={imgLoading}
-                  onClick={() => fileInputRef.current.click()}
+                  onClick={handleChooseImage}
                 >
                   {imgLoading ? 'Loading…' : 'Choose image'}
                 </button>
@@ -240,7 +268,7 @@ const [mode, setMode] = useState('custom');
                     type="button"
                     className="link-btn danger"
                     style={{ fontSize: 12 }}
-                    onClick={() => { set('img_data', ''); set('img_url', ''); }}
+                    onClick={handleRemoveImage}
                   >
                     Remove
                   </button>
