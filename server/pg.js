@@ -1,11 +1,15 @@
+// pg.js
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 const { Pool } = require('pg');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false,
 });
 
+// ===== INIT DB =====
 async function initDB() {
   // patients
   await pool.query(`
@@ -71,7 +75,7 @@ async function initDB() {
     );
   `);
 
-  // make sure missing columns are added even if table already existed
+  // ensure columns (safe migrations)
   await pool.query(`
     ALTER TABLE therapists
     ADD COLUMN IF NOT EXISTS reset_token TEXT;
@@ -112,13 +116,20 @@ async function initDB() {
     );
   `);
 
-  console.log('✅ Tables ready (patients + exercises + therapists + reports + share_pages)');
+  console.log('✅ Tables ready');
 }
 
+// ===== TEST CONNECTION =====
 async function testPgConnection() {
-  await initDB();
-  const result = await pool.query('SELECT NOW() AS now');
-  console.log('✅ Postgres connected:', result.rows[0].now);
+  try {
+    await initDB();
+
+    const result = await pool.query('SELECT NOW() AS now');
+    console.log('✅ Postgres connected:', result.rows[0].now);
+  } catch (err) {
+    console.error('❌ Postgres error:', err.message);
+    process.exit(1);
+  }
 }
 
 module.exports = { pool, testPgConnection };
