@@ -1,7 +1,6 @@
 // server/routes/reports.js
 const router = require('express').Router();
 const { pool } = require('../pg');
-const crypto = require('crypto');
 const { authAny } = require('../middleware/auth');
 
 async function canAccess(user, pid) {
@@ -25,7 +24,7 @@ function parseReport(r) {
     notes: r.notes,
     session_rpe: r.session_rpe ? JSON.parse(r.session_rpe) : {},
     session_data: r.session_data ? JSON.parse(r.session_data) : {},
-    submitted_at: r.submitted_at || r.created_at || null,
+    submitted_at: r.created_at || null,
   };
 }
 
@@ -35,7 +34,7 @@ function asyncHandler(fn) {
   };
 }
 
-// GET /reports/:pid — flat array of reports
+// GET /reports/:pid
 router.get(
   '/:pid',
   authAny,
@@ -53,7 +52,7 @@ router.get(
   })
 );
 
-// POST /reports/:pid — submit/update a report
+// POST /reports/:pid
 router.post(
   '/:pid',
   authAny,
@@ -106,16 +105,13 @@ router.post(
         ]
       );
     } else {
-      const id = 'r_' + crypto.randomUUID().slice(0, 8);
-
       await pool.query(
         `
         INSERT INTO reports
-        (id, patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)
+        (patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
         `,
         [
-          id,
           pid,
           day_key,
           fatigue ?? null,
