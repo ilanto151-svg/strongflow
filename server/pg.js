@@ -222,39 +222,50 @@ async function initDB() {
     );
   `);
 
-  // indexes
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_exercises_patient_day
-    ON exercises(patient_id, day_key);
-  `);
+  // ===== INDEXES =====
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_reports_patient
-    ON reports(patient_id);
-  `);
+// exercises
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_exercises_patient_day
+  ON exercises(patient_id, day_key);
+`);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_patients_therapist
-    ON patients(therapist_id);
-  `);
+// reports
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_reports_patient
+  ON reports(patient_id);
+`);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_share_pages_patient
-    ON share_pages(patient_id);
-  `);
+// 🔥 חשוב — למנוע כפילויות דיווחים לאותו יום
+await pool.query(`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_reports_patient_day_unique
+  ON reports(patient_id, day_key);
+`);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_patient_events_patient
-    ON patient_events(patient_id);
-  `);
+// patients
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_patients_therapist
+  ON patients(therapist_id);
+`);
 
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS idx_patient_event_occurrences_event
-    ON patient_event_occurrences(event_id);
-  `);
+// share pages
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_share_pages_patient
+  ON share_pages(patient_id);
+`);
 
-  console.log('✅ Tables ready');
-}
+// events
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_patient_events_patient
+  ON patient_events(patient_id);
+`);
+
+await pool.query(`
+  CREATE INDEX IF NOT EXISTS idx_patient_event_occurrences_event
+  ON patient_event_occurrences(event_id);
+`);
+
+console.log('✅ Tables ready');
 
 // ===== TEST CONNECTION =====
 async function testPgConnection() {
