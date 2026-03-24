@@ -4,7 +4,10 @@ const { pool } = require('../pg');
 const crypto = require('crypto');
 const { authTherapist } = require('../middleware/auth');
 
-// ===== ACCESS =====
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCESS GUARD
+// ─────────────────────────────────────────────────────────────────────────────
+
 async function canAccess(therapistId, patientId) {
   const { rows } = await pool.query(
     'SELECT id FROM patients WHERE id=$1 AND therapist_id=$2',
@@ -13,187 +16,246 @@ async function canAccess(therapistId, patientId) {
   return rows.length > 0;
 }
 
-// ===== PARSERS =====
+// ─────────────────────────────────────────────────────────────────────────────
+// ROW PARSERS
+// ─────────────────────────────────────────────────────────────────────────────
+
 function parseTreatment(r) {
   return { ...r, is_active: !!r.is_active };
 }
 
 function parseRule(r) {
-  return {
-    ...r,
-    repeat_each_cycle: !!r.repeat_each_cycle,
-    is_active: !!r.is_active,
-  };
+  return { ...r, repeat_each_cycle: !!r.repeat_each_cycle, is_active: !!r.is_active };
 }
 
-// ===== DATE HELPERS =====
-
-function freqToMs(value, unit) {
-  if (unit === 'days')  return value * 86400000;
-  if (unit === 'weeks') return value * 7 * 86400000;
-  return value * 30 * 86400000; // months approximation
-}
-
-function offsetToMs(value, unit) {
-  return unit === 'weeks' ? value * 7 * 86400000 : value * 86400000;
-}
-
-function toDateStr(ms) {
-  return new Date(ms).toISOString().split('T')[0];
-}
-
-// Human-readable timing label — used in reminder banners and tooltips.
-// offset_value / offset_unit come directly from the DB row so they are
-// always defined here (the caller must guarantee that).
-function timingLabel(trigger_type, offset_value, offset_unit) {
-  if (trigger_type === 'on')          return 'on treatment day';
-  if (trigger_type === 'during_week') return 'during treatment week';
-  const dir  = trigger_type === 'before' ? 'before' : 'after';
-  const unit = Number(offset_value) === 1
-    ? String(offset_unit).replace(/s$/, '')  // "1 day" not "1 days"
-    : offset_unit;
-  return `${offset_value} ${unit} ${dir}`;
-}
-
-// ===== REMINDER BANNERS (used by GET /:pid/reminders) =====
+// ─────────────────────────────────────────────────────────────────────────────
+// DATE UTILITIES  (all work on YYYY-MM-DD strings)
 //
-// Returns reminder objects for the top-of-week banners.
-// Fixes vs. old version:
-//   • Includes message, trigger_type, offset_value, offset_unit in every object
-//   • Respects repeat_each_cycle — if false, only fires for cycle n=0
+// WHY strings?  'YYYY-MM-DD' lexicographic order == chronological order, so
+// we can use plain < > === comparisons without any timezone conversion.
+// WHY noon UTC?  Arithmetic on a Date set to T12:00:00Z avoids the DST
+// "spring forward" edge case that can shift an end-of-day midnight into the
+// next (or previous) UTC date.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Return the YYYY-MM-DD string n calendar days after dateStr. */
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+/**
+ * Add (value, unit) to a YYYY-MM-DD string.
+ * Uses exact calendar arithmetic:  months advances the month counter (not 30 days).
+ */
+function addPeriod(dateStr, value, unit) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  if      (unit === 'days')  d.setUTCDate(d.getUTCDate()   + value);
+  else if (unit === 'weeks') d.setUTCDate(d.getUTCDate()   + value * 7);
+  else                       d.setUTCMonth(d.getUTCMonth() + value);   // months
+  return d.toISOString().split('T')[0];
+}
+
+/**
+ * Apply a reminder-rule offset to a cycle date → reminder date string.
+ *  'on'     → same day
+ *  'before' → subtract offset
+ *  'after'  → add offset
+ */
+function applyOffset(cycleDateStr, triggerType, offsetValue, offsetUnit) {
+  if (triggerType === 'on') return cycleDateStr;
+  const sign = triggerType === 'before' ? -1 : 1;
+  if (offsetUnit === 'weeks') return addDays(cycleDateStr, sign * offsetValue * 7);
+  return addDays(cycleDateStr, sign * offsetValue); // days
+}
+
+/** YYYY-MM-DD of the Sunday that begins the calendar week containing dateStr. */
+function sundayOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  return d.toISOString().split('T')[0];
+}
+
+/** YYYY-MM-DD of the Saturday that ends the calendar week containing dateStr. */
+function saturdayOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + (6 - d.getUTCDay()));
+  return d.toISOString().split('T')[0];
+}
+
+/** Human-readable timing label shown in tooltips and banners. */
+function timingLabel(triggerType, offsetValue, offsetUnit) {
+  if (triggerType === 'on')          return 'on treatment day';
+  if (triggerType === 'during_week') return 'during treatment week';
+  const dir  = triggerType === 'before' ? 'before' : 'after';
+  const unit = Number(offsetValue) === 1
+    ? String(offsetUnit).replace(/s$/, '')  // "day" not "days"
+    : offsetUnit;
+  return `${offsetValue} ${unit} ${dir}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CYCLE GENERATOR
+//
+// Returns every treatment occurrence whose date is within [rangeStart, rangeEnd]
+// (both YYYY-MM-DD strings, inclusive).
+//
+// Algorithm:
+//  1. Approximate how many periods to skip to reach rangeStart (ms math, just
+//     for the skip count — accuracy here only affects performance, not correctness).
+//  2. Walk forward using exact addPeriod() until we pass rangeEnd.
+//  3. Track cycleIndex (0 = start_date itself) for repeat_each_cycle logic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd) {
+  if (!startDate) return [];
+
+  // Skip count approximation — use milliseconds only to estimate how many
+  // full periods fit between startDate and rangeStart.
+  const approxFMs = freqValue * (
+    freqUnit === 'days'  ? 86_400_000 :
+    freqUnit === 'weeks' ? 7 * 86_400_000 :
+    30 * 86_400_000       // months: rough estimate only
+  );
+  const gapMs = new Date(rangeStart + 'T12:00:00Z').getTime()
+              - new Date(startDate  + 'T12:00:00Z').getTime();
+  const skipCount = (approxFMs > 0 && gapMs > 0)
+    ? Math.max(0, Math.floor(gapMs / approxFMs) - 2)
+    : 0;
+
+  // Fast-forward to near rangeStart using exact addPeriod
+  let current    = startDate;
+  let cycleIndex = 0;
+  for (let i = 0; i < skipCount; i++) {
+    const next = addPeriod(current, freqValue, freqUnit);
+    if (next <= current) return []; // zero-period safety
+    current = next;
+    cycleIndex++;
+  }
+
+  // Collect every cycle that lands inside [rangeStart, rangeEnd]
+  const results = [];
+  let safety = 0;
+  while (current <= rangeEnd && safety < 10_000) {
+    safety++;
+    if (lastDate && current > lastDate) break;
+    if (current >= rangeStart) results.push({ date: current, cycleIndex });
+    const next = addPeriod(current, freqValue, freqUnit);
+    if (next <= current) break; // zero-period safety
+    current = next;
+    cycleIndex++;
+  }
+
+  return results;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REMINDER BANNER COMPUTATION  (used by GET /:pid/reminders)
+//
+// Returns an array of objects that drive the dismissable top-of-week banners.
+// Now correctly includes every field the UI needs (message, trigger_type,
+// offset_value, offset_unit) and respects repeat_each_cycle.
+// ─────────────────────────────────────────────────────────────────────────────
 
 function computeReminders(treatment, rules, weekStart, weekEnd, dismissed) {
+  if (!treatment.start_date) return [];
+
   const dismissedSet = new Set(dismissed.map(d => `${d.rule_id}|${d.occurrence_date}`));
+  const reminders    = [];
 
-  const startMs     = new Date(treatment.start_date).getTime();
-  const lastMs      = treatment.last_treatment_date
-    ? new Date(treatment.last_treatment_date).getTime() + 86399999
-    : Infinity;
-  const weekStartMs = new Date(weekStart).getTime();
-  const weekEndMs   = new Date(weekEnd).getTime() + 86399999;
-  const fMs         = freqToMs(treatment.frequency_value, treatment.frequency_unit);
+  // Find all cycles that could produce reminders intersecting [weekStart, weekEnd].
+  // Expand search window by 60 days so offset reminders are never missed.
+  const searchStart = addDays(weekStart, -60);
+  const searchEnd   = addDays(weekEnd,   +60);
 
-  const reminders = [];
+  const cycles = getCyclesInRange(
+    treatment.start_date,
+    treatment.frequency_value,
+    treatment.frequency_unit,
+    treatment.last_treatment_date || null,
+    searchStart,
+    searchEnd
+  );
 
-  for (const rule of rules) {
-    if (!rule.is_active) continue;
+  for (const { date: cycleDate, cycleIndex } of cycles) {
+    for (const rule of rules) {
+      if (!rule.is_active) continue;
+      if (!rule.repeat_each_cycle && cycleIndex > 0) continue;
 
-    const isDuringWeek = rule.trigger_type === 'during_week';
+      let occurrenceDate;
 
-    const offMs = isDuringWeek
-      ? 0
-      : rule.trigger_type === 'before'
-        ? -offsetToMs(rule.offset_value, rule.offset_unit)
-        : offsetToMs(rule.offset_value, rule.offset_unit); // 'after' or 'on'
-
-    const nMin = Math.floor((weekStartMs - offMs - startMs) / fMs);
-    const nMax = Math.ceil((weekEndMs  - offMs - startMs) / fMs);
-
-    for (let n = Math.max(0, nMin - 1); n <= nMax + 1; n++) {
-      // If rule only fires once, skip every cycle after the first
-      if (!rule.repeat_each_cycle && n > 0) continue;
-
-      const cycleMs = startMs + n * fMs;
-      if (cycleMs < startMs) continue;
-      if (cycleMs > lastMs)  continue;
-
-      const cycleDate = toDateStr(cycleMs);
-
-      if (isDuringWeek) {
-        const dow   = new Date(cycleMs).getDay();
-        const sunMs = cycleMs - dow * 86400000;
-        const satMs = sunMs + 6 * 86400000 + 86399999;
-        if (sunMs > weekEndMs || satMs < weekStartMs) continue;
-
-        const key = `${rule.id}|${cycleDate}`;
-        if (!dismissedSet.has(key)) {
-          reminders.push({
-            rule_id:        rule.id,
-            treatment_id:   treatment.id,
-            treatment_name: treatment.name,
-            occurrence_date: cycleDate,
-            cycle_date:     cycleDate,
-            message:        rule.message || '',
-            trigger_type:   rule.trigger_type,
-            offset_value:   rule.offset_value,
-            offset_unit:    rule.offset_unit,
-          });
-        }
+      if (rule.trigger_type === 'during_week') {
+        // Fires for the entire calendar week containing cycleDate.
+        const cycleSun = sundayOfWeek(cycleDate);
+        const cycleSat = saturdayOfWeek(cycleDate);
+        // Does the cycle's week overlap with [weekStart, weekEnd]?
+        if (cycleSun > weekEnd || cycleSat < weekStart) continue;
+        occurrenceDate = cycleDate; // key is the treatment date itself
       } else {
-        const reminderMs   = cycleMs + offMs;
-        if (reminderMs < weekStartMs || reminderMs > weekEndMs) continue;
-
-        const reminderDate = toDateStr(reminderMs);
-        const key          = `${rule.id}|${reminderDate}`;
-
-        if (!dismissedSet.has(key)) {
-          reminders.push({
-            rule_id:        rule.id,
-            treatment_id:   treatment.id,
-            treatment_name: treatment.name,
-            occurrence_date: reminderDate,
-            cycle_date:     cycleDate,
-            message:        rule.message || '',
-            trigger_type:   rule.trigger_type,
-            offset_value:   rule.offset_value,
-            offset_unit:    rule.offset_unit,
-          });
-        }
+        occurrenceDate = applyOffset(cycleDate, rule.trigger_type, rule.offset_value, rule.offset_unit);
+        if (occurrenceDate < weekStart || occurrenceDate > weekEnd) continue;
       }
+
+      const key = `${rule.id}|${occurrenceDate}`;
+      if (dismissedSet.has(key)) continue;
+
+      reminders.push({
+        rule_id:         rule.id,
+        treatment_id:    treatment.id,
+        treatment_name:  treatment.name     || '',
+        occurrence_date: occurrenceDate,
+        cycle_date:      cycleDate,
+        message:         rule.message       || '',
+        trigger_type:    rule.trigger_type,
+        offset_value:    rule.offset_value,
+        offset_unit:     rule.offset_unit,
+      });
     }
   }
 
   return reminders;
 }
 
-// ===== CALENDAR REMINDER DATES (used by GET /:pid/cycles) =====
+// ─────────────────────────────────────────────────────────────────────────────
+// CALENDAR MARKER COMPUTATION  (used by GET /:pid/cycles → reminderDates)
 //
-// Returns { "YYYY-MM-DD": [ reminderEntry, … ] } for calendar day markers.
-// Only handles before / on / after — during_week has no single date.
-// Does NOT check dismissed state (calendar dots are always visible).
-// Respects repeat_each_cycle.
+// Returns { "YYYY-MM-DD": [reminderEntry…] } for dot markers on the calendar.
+// No dismissal check — dots are always visible.
+// Skips during_week (no single date).
+// ─────────────────────────────────────────────────────────────────────────────
 
-function computeReminderDates(treatment, rules, rangeStartMs, rangeEndMs) {
-  const startMs = new Date(treatment.start_date).getTime();
-  const lastMs  = treatment.last_treatment_date
-    ? new Date(treatment.last_treatment_date).getTime() + 86399999
-    : Infinity;
-  const fMs = freqToMs(treatment.frequency_value, treatment.frequency_unit);
+function computeReminderDates(treatment, rules, rangeStart, rangeEnd) {
+  if (!treatment.start_date) return {};
+
+  // Expand cycle search so offset reminders from just-outside cycles are caught.
+  const searchStart = addDays(rangeStart, -60);
+  const searchEnd   = addDays(rangeEnd,   +60);
+
+  const cycles = getCyclesInRange(
+    treatment.start_date,
+    treatment.frequency_value,
+    treatment.frequency_unit,
+    treatment.last_treatment_date || null,
+    searchStart,
+    searchEnd
+  );
 
   const result = {};
 
-  for (const rule of rules) {
-    if (!rule.is_active) continue;
-    if (rule.trigger_type === 'during_week') continue; // no single date
+  for (const { date: cycleDate, cycleIndex } of cycles) {
+    for (const rule of rules) {
+      if (!rule.is_active)                             continue;
+      if (rule.trigger_type === 'during_week')         continue; // no single date
+      if (!rule.repeat_each_cycle && cycleIndex > 0)  continue;
 
-    const offMs = rule.trigger_type === 'before'
-      ? -offsetToMs(rule.offset_value, rule.offset_unit)
-      : rule.trigger_type === 'on'
-        ? 0
-        : offsetToMs(rule.offset_value, rule.offset_unit); // after
-
-    // Expand cycle search to catch reminders that land inside the range
-    // even when the cycle itself is just outside.
-    const nMin = Math.max(0, Math.floor((rangeStartMs - offMs - startMs) / fMs) - 1);
-    const nMax = Math.ceil((rangeEndMs - offMs - startMs) / fMs) + 1;
-
-    for (let n = nMin; n <= nMax; n++) {
-      if (!rule.repeat_each_cycle && n > 0) continue;
-
-      const cycleMs = startMs + n * fMs;
-      if (cycleMs < startMs) continue;
-      if (cycleMs > lastMs)  continue;
-
-      const reminderMs = cycleMs + offMs;
-      if (reminderMs < rangeStartMs || reminderMs > rangeEndMs) continue;
-
-      const reminderDate = toDateStr(reminderMs);
-      const cycleDate    = toDateStr(cycleMs);
+      const reminderDate = applyOffset(cycleDate, rule.trigger_type, rule.offset_value, rule.offset_unit);
+      if (reminderDate < rangeStart || reminderDate > rangeEnd) continue;
 
       if (!result[reminderDate]) result[reminderDate] = [];
       result[reminderDate].push({
-        message:        rule.message || '',
-        treatment_name: treatment.name,
+        message:        rule.message       || '',
+        treatment_name: treatment.name     || '',
         timing:         timingLabel(rule.trigger_type, rule.offset_value, rule.offset_unit),
         trigger_type:   rule.trigger_type,
         offset_value:   rule.offset_value,
@@ -206,7 +268,9 @@ function computeReminderDates(treatment, rules, rangeStartMs, rangeEndMs) {
   return result;
 }
 
-// ===== ROUTES =====
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
 
 // GET all treatments (with nested rules) for a patient
 router.get('/:pid', authTherapist, async (req, res) => {
@@ -245,18 +309,16 @@ router.post('/:pid', authTherapist, async (req, res) => {
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
   `, [
     id, req.params.pid, b.name,
-    b.treatment_type    || '',
-    b.frequency_value   || 1,
-    b.frequency_unit    || 'weeks',
+    b.treatment_type      || '',
+    b.frequency_value     || 1,
+    b.frequency_unit      || 'weeks',
     b.start_date,
     b.last_treatment_date || null,
-    b.notes             || '',
+    b.notes               || '',
     b.is_active !== false,
   ]);
 
-  const { rows } = await pool.query(
-    'SELECT * FROM patient_treatments WHERE id=$1', [id]
-  );
+  const { rows } = await pool.query('SELECT * FROM patient_treatments WHERE id=$1', [id]);
   res.json(parseTreatment(rows[0]));
 });
 
@@ -273,15 +335,14 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     WHERE id=$9 AND patient_id=$10
   `, [
     b.name,
-    b.treatment_type    || '',
-    b.frequency_value   || 1,
-    b.frequency_unit    || 'weeks',
+    b.treatment_type      || '',
+    b.frequency_value     || 1,
+    b.frequency_unit      || 'weeks',
     b.start_date,
     b.last_treatment_date || null,
-    b.notes             || '',
+    b.notes               || '',
     b.is_active !== false,
-    req.params.tid,
-    req.params.pid,
+    req.params.tid, req.params.pid,
   ]);
 
   res.json({ ok: true });
@@ -300,12 +361,13 @@ router.delete('/:pid/:tid', authTherapist, async (req, res) => {
 });
 
 // GET reminder banners for a week
-// Returns a flat array used by the dismissable top-of-week banners.
+// Returns a flat array for the dismissable top-of-week alert banners.
 router.get('/:pid/reminders', authTherapist, async (req, res) => {
   if (!(await canAccess(req.user.id, req.params.pid)))
     return res.status(403).json({ error: 'Forbidden' });
 
   const { week_start, week_end } = req.query;
+  if (!week_start || !week_end) return res.json([]);
 
   const { rows: treatments } = await pool.query(
     'SELECT * FROM patient_treatments WHERE patient_id=$1 AND is_active=true',
@@ -322,7 +384,6 @@ router.get('/:pid/reminders', authTherapist, async (req, res) => {
 
     const ruleIds = rules.map(r => r.id);
     let dismissed = [];
-
     if (ruleIds.length > 0) {
       const { rows } = await pool.query(
         `SELECT rule_id, occurrence_date FROM treatment_reminder_occurrences
@@ -332,42 +393,32 @@ router.get('/:pid/reminders', authTherapist, async (req, res) => {
       dismissed = rows;
     }
 
-    const reminders = computeReminders(
-      parseTreatment(t),
-      rules.map(parseRule),
-      week_start,
-      week_end,
-      dismissed
+    allReminders.push(
+      ...computeReminders(parseTreatment(t), rules.map(parseRule), week_start, week_end, dismissed)
     );
-
-    allReminders.push(...reminders);
   }
 
   res.json(allReminders);
 });
 
-// GET cycles — calendar data for a date range.
+// GET calendar cycle data for a date range.
 //
-// Returns TWO separate structures:
+// Returns:
+//   treatmentDates: { "YYYY-MM-DD": [{ name, treatment_type, notes }] }
+//   reminderDates:  { "YYYY-MM-DD": [{ message, treatment_name, timing,
+//                                       trigger_type, offset_value,
+//                                       offset_unit, cycle_date }] }
 //
-//   treatmentDates:  { "YYYY-MM-DD": [{ name, treatment_type, notes }] }
-//   reminderDates:   { "YYYY-MM-DD": [{ message, treatment_name, timing,
-//                                        trigger_type, offset_value,
-//                                        offset_unit, cycle_date }] }
-//
-// treatmentDates contains days when the patient actually receives treatment.
-// reminderDates  contains days derived from reminder rules (before/on/after).
-// A date can appear in BOTH if a rule triggers on the treatment day itself.
+// A date can appear in BOTH (e.g. an on-day reminder rule).
+// Both week-view and month-view calls use this endpoint.
 
 router.get('/:pid/cycles', authTherapist, async (req, res) => {
   if (!(await canAccess(req.user.id, req.params.pid)))
     return res.status(403).json({ error: 'Forbidden' });
 
   const { week_start, week_end } = req.query;
-  if (!week_start || !week_end) return res.json({ treatmentDates: {}, reminderDates: {} });
-
-  const rangeStartMs = new Date(week_start).getTime();
-  const rangeEndMs   = new Date(week_end).getTime() + 86399999;
+  if (!week_start || !week_end)
+    return res.json({ treatmentDates: {}, reminderDates: {} });
 
   const { rows: treatments } = await pool.query(
     'SELECT * FROM patient_treatments WHERE patient_id=$1 AND is_active=true',
@@ -384,34 +435,27 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
     );
     const parsedRules = rules.map(parseRule);
 
-    const startMs = new Date(t.start_date).getTime();
-    const lastMs  = t.last_treatment_date
-      ? new Date(t.last_treatment_date).getTime() + 86399999
-      : Infinity;
-    const fMs = freqToMs(t.frequency_value, t.frequency_unit);
-
     // ── Treatment cycle dates ──────────────────────────────────────────────
-    const nMin = Math.max(0, Math.floor((rangeStartMs - startMs) / fMs) - 1);
-    const nMax = Math.ceil((rangeEndMs - startMs) / fMs) + 1;
+    const cycles = getCyclesInRange(
+      t.start_date,
+      t.frequency_value,
+      t.frequency_unit,
+      t.last_treatment_date || null,
+      week_start,
+      week_end
+    );
 
-    for (let n = nMin; n <= nMax; n++) {
-      const cycleMs = startMs + n * fMs;
-      if (cycleMs < startMs)      continue;
-      if (cycleMs > lastMs)       continue;
-      if (cycleMs < rangeStartMs) continue;
-      if (cycleMs > rangeEndMs)   continue;
-
-      const dateStr = toDateStr(cycleMs);
-      if (!treatmentDates[dateStr]) treatmentDates[dateStr] = [];
-      treatmentDates[dateStr].push({
+    for (const { date } of cycles) {
+      if (!treatmentDates[date]) treatmentDates[date] = [];
+      treatmentDates[date].push({
         name:           t.name,
         treatment_type: t.treatment_type || '',
         notes:          t.notes          || '',
       });
     }
 
-    // ── Reminder dates from rules ──────────────────────────────────────────
-    const rDates = computeReminderDates(parseTreatment(t), parsedRules, rangeStartMs, rangeEndMs);
+    // ── Reminder dates ─────────────────────────────────────────────────────
+    const rDates = computeReminderDates(parseTreatment(t), parsedRules, week_start, week_end);
     for (const [date, items] of Object.entries(rDates)) {
       if (!reminderDates[date]) reminderDates[date] = [];
       reminderDates[date].push(...items);
@@ -435,8 +479,7 @@ router.post('/:pid/:tid/rules', authTherapist, async (req, res) => {
      message, repeat_each_cycle, is_active)
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
   `, [
-    id,
-    req.params.tid,
+    id, req.params.tid,
     b.trigger_type      || 'after',
     b.offset_value      || 0,
     b.offset_unit       || 'days',
@@ -466,8 +509,7 @@ router.put('/:pid/:tid/rules/:rid', authTherapist, async (req, res) => {
     b.message           || '',
     b.repeat_each_cycle !== false,
     b.is_active !== false,
-    req.params.rid,
-    req.params.tid,
+    req.params.rid, req.params.tid,
   ]);
 
   res.json({ ok: true });
