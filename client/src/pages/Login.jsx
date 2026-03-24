@@ -123,8 +123,8 @@ export default function Login() {
 <img
   src="/strongflow.jpg"
   alt="StrongFlow logo"
-  className="w-24 h-24 rounded-3xl object-cover shadow-lg"
-/>
+  className="w-20 h-20 mx-auto mb-4 rounded-3xl object-cover shadow-lg"
+/>/
           <div className="splash-title">StrongFlow</div>
           <div className="splash-sub">Remote Exercise Care Platform</div>
         </div>
