@@ -119,12 +119,7 @@ export default function Login() {
     <div id="screen-login">
       <div className="splash-card">
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
-          <img src="/logo.png" alt="StrongFlow" className="splash-logo" onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }} />
-<img
-  src="/strongflow.jpg"
-  alt="StrongFlow logo"
-  className="w-20 h-20 mx-auto mb-4 rounded-3xl object-cover shadow-lg"
-/>/
+          <img src="/strongflow.jpg" alt="StrongFlow" style={{ width:80, height:80, borderRadius:18, objectFit:'cover', boxShadow:'0 4px 16px rgba(0,0,0,0.25)' }} />
           <div className="splash-title">StrongFlow</div>
           <div className="splash-sub">Remote Exercise Care Platform</div>
         </div>
