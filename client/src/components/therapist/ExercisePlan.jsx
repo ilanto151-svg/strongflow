@@ -359,6 +359,9 @@ export default function ExercisePlan({ patient }) {
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</div>
                   {t.treatment_type && <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.treatment_type}</div>}
                   {t.notes && <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📝 {t.notes}</div>}
+                  {t.rule_messages?.map((msg, mi) => (
+                    <div key={mi} style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📋 {msg}</div>
+                  ))}
                 </div>
               ))}
             </div>

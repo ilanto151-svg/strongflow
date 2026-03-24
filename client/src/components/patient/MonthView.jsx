@@ -36,8 +36,19 @@ export default function MonthView({ exercises, treatmentDates = {}, onMonthChang
     return exercises.filter(e => e.day_key === dateToKey(date));
   }
 
+  // Build the native tooltip text for a treatment day (shown on hover via title attr)
+  function txTitle(txList) {
+    return txList.map(tx => {
+      const lines = [tx.name];
+      if (tx.notes) lines.push(tx.notes);
+      if (tx.rule_messages?.length) tx.rule_messages.forEach(m => lines.push(m));
+      return lines.join(' · ');
+    }).join('\n');
+  }
+
   const monthName = new Date(year, month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const selExs = selected ? dayExs(selected) : [];
+  const selTx  = selected ? (treatmentDates[localDateStr(selected)] || []) : [];
 
   return (
     <div>
@@ -68,7 +79,7 @@ export default function MonthView({ exercises, treatmentDates = {}, onMonthChang
           return (
             <button key={i}
               onClick={() => setSelected(isSel ? null : d)}
-              title={hasTx ? txList.map(t => t.name).join(', ') : undefined}
+              title={hasTx ? txTitle(txList) : undefined}
               style={{
                 padding: '6px 4px', borderRadius: 10,
                 border: isSel ? '2px solid var(--blue)' : hasTx ? '1.5px solid #fca5a5' : '1px solid var(--gray-200)',
@@ -92,14 +103,33 @@ export default function MonthView({ exercises, treatmentDates = {}, onMonthChang
       {/* Selected day detail */}
       {selected && (
         <div style={{ marginTop: 20, padding: 16, background: '#fff', borderRadius: 16, border: '1px solid var(--gray-200)', boxShadow: 'var(--shadow)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontWeight: 700 }}>{fmtDate(selected)}</span>
-            {treatmentDates[localDateStr(selected)]?.length > 0 && (
-              <span style={{ fontSize: 12, color: '#991b1b', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
-                🎗️ {treatmentDates[localDateStr(selected)].map(t => t.name).join(', ')}
-              </span>
-            )}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: selTx.length ? 8 : 0 }}>{fmtDate(selected)}</div>
+
+            {/* Treatment block — one entry per treatment on this day */}
+            {selTx.map((tx, i) => (
+              <div key={i} style={{
+                display: 'flex', flexDirection: 'column', gap: 2,
+                background: '#fef2f2', border: '1px solid #fca5a5',
+                borderRadius: 8, padding: '6px 10px',
+                marginBottom: i < selTx.length - 1 ? 6 : 0,
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#991b1b' }}>
+                  🎗️ {tx.name}
+                  {tx.treatment_type && (
+                    <span style={{ fontWeight: 400, color: '#b91c1c', marginLeft: 6 }}>{tx.treatment_type}</span>
+                  )}
+                </div>
+                {tx.notes && (
+                  <div style={{ fontSize: 12, color: '#7f1d1d' }}>{tx.notes}</div>
+                )}
+                {tx.rule_messages?.map((msg, mi) => (
+                  <div key={mi} style={{ fontSize: 12, color: '#7f1d1d' }}>📋 {msg}</div>
+                ))}
+              </div>
+            ))}
           </div>
+
           {selExs.length === 0 ? (
             <p style={{ color: 'var(--gray-400)', fontSize: 13 }}>No exercises scheduled.</p>
           ) : selExs.map(ex => {

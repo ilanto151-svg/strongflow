@@ -272,7 +272,7 @@ router.get('/:pid/reminders', authTherapist, async (req, res) => {
 });
 
 // GET cycles — actual treatment dates within a date range
-// Returns { "YYYY-MM-DD": [{ name, treatment_type, notes }, ...], ... }
+// Returns { "YYYY-MM-DD": [{ name, treatment_type, notes, rule_messages }, ...], ... }
 router.get('/:pid/cycles', authTherapist, async (req, res) => {
   if (!(await canAccess(req.user.id, req.params.pid)))
     return res.status(403).json({ error: 'Forbidden' });
@@ -291,6 +291,14 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
   const result = {};
 
   for (const t of treatments) {
+    // Collect messages from active reminder rules that fire on the treatment day itself
+    const { rows: onRules } = await pool.query(
+      `SELECT message FROM treatment_reminder_rules
+       WHERE treatment_id=$1 AND trigger_type='on' AND is_active=true`,
+      [t.id]
+    );
+    const ruleMessages = onRules.map(r => r.message).filter(m => m && m.trim());
+
     const startMs = new Date(t.start_date).getTime();
     const lastMs  = t.last_treatment_date
       ? new Date(t.last_treatment_date).getTime() + 86399999
@@ -312,6 +320,7 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
         name: t.name,
         treatment_type: t.treatment_type || '',
         notes: t.notes || '',
+        rule_messages: ruleMessages,
       });
     }
   }
