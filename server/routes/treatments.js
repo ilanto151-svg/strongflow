@@ -123,7 +123,10 @@ function timingLabel(triggerType, offsetValue, offsetUnit) {
 // repeat_each_cycle correctly.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd) {
+function getCyclesInRange(
+  startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd,
+  activeBlockCount = 0, breakCount = 0, breakUnit = 'weeks'
+) {
   if (!startDate) return [];
 
   // Always coerce to number — guards against pg/PgBouncer returning INTEGER as string.
@@ -136,32 +139,117 @@ function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, 
     ? String(lastDate)
     : null;
 
+  const aBlock   = Number(activeBlockCount) || 0;
+  const bCount   = Number(breakCount)       || 0;
+  const hasBreak = aBlock > 0 && bCount > 0;
+
   const results = [];
 
-  // ── Days / Weeks: direct index computation ─────────────────────────────────
+  // ── Days / Weeks ───────────────────────────────────────────────────────────
   if (freqUnit === 'days' || freqUnit === 'weeks') {
-    const periodDays = freqUnit === 'weeks' ? fv * 7 : fv; // always a JS number
+    const periodDays = freqUnit === 'weeks' ? fv * 7 : fv;
 
-    // Compute approximate first index at/after rangeStart to avoid iterating
-    // through thousands of past cycles.  Both dates are T12:00:00Z so the gap
-    // is always an exact integer number of days — Math.round is just insurance.
-    const gapMs   = new Date(rangeStart + 'T12:00:00Z').getTime()
-                  - new Date(startDate  + 'T12:00:00Z').getTime();
+    if (hasBreak && (breakUnit === 'days' || breakUnit === 'weeks')) {
+      // ── Break pattern, fixed-day super-period → direct index computation ──
+      const breakDays       = breakUnit === 'weeks' ? bCount * 7 : bCount;
+      const superPeriodDays = aBlock * periodDays + breakDays;
+
+      const gapMs   = new Date(rangeStart + 'T12:00:00Z').getTime()
+                    - new Date(startDate  + 'T12:00:00Z').getTime();
+      const gapDays = Math.round(gapMs / 86_400_000);
+      // Back up 1 super-period worth of occurrences so we never miss the first
+      const firstN  = gapDays > 0
+        ? Math.max(0, Math.floor(gapDays / superPeriodDays) - 1) * aBlock
+        : 0;
+
+      for (let n = firstN; n < firstN + 10_000; n++) {
+        const sp           = Math.floor(n / aBlock);
+        const pos          = n % aBlock;
+        const daysFromStart = sp * superPeriodDays + pos * periodDays;
+        const cycleDate    = addDays(startDate, daysFromStart);
+        if (cycleDate > rangeEnd) break;
+        if (endDate && cycleDate > endDate) break;
+        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: n });
+      }
+      return results;
+    }
+
+    if (hasBreak && breakUnit === 'months') {
+      // ── Break pattern, months break — iterate super-periods ───────────────
+      let blockStart = startDate;
+      let occIdx     = 0;
+      let safety     = 0;
+      while (blockStart <= rangeEnd && safety < 10_000) {
+        safety++;
+        for (let pos = 0; pos < aBlock; pos++) {
+          const cycleDate = addDays(blockStart, pos * periodDays);
+          if (endDate && cycleDate > endDate) return results;
+          if (cycleDate > rangeEnd) return results;
+          if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx });
+          occIdx++;
+        }
+        const blockEnd = addDays(blockStart, aBlock * periodDays);
+        const next     = addPeriod(blockEnd, bCount, 'months');
+        if (next <= blockEnd) break; // infinite-loop guard
+        blockStart = next;
+      }
+      return results;
+    }
+
+    // ── No break — original direct index computation ───────────────────────
+    const gapMs    = new Date(rangeStart + 'T12:00:00Z').getTime()
+                   - new Date(startDate  + 'T12:00:00Z').getTime();
     const gapDays  = Math.round(gapMs / 86_400_000);
-    const firstIdx = Math.max(0, Math.floor(gapDays / periodDays) - 1); // back up 1
+    const firstIdx = Math.max(0, Math.floor(gapDays / periodDays) - 1);
 
     for (let idx = firstIdx; idx < firstIdx + 10_000; idx++) {
-      const cycleDate = addDays(startDate, idx * periodDays); // always numeric
+      const cycleDate = addDays(startDate, idx * periodDays);
       if (cycleDate > rangeEnd) break;
       if (endDate && cycleDate > endDate) break;
-      if (cycleDate >= rangeStart) {
-        results.push({ date: cycleDate, cycleIndex: idx });
-      }
+      if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: idx });
     }
     return results;
   }
 
-  // ── Months: iterative (no fixed day count) ─────────────────────────────────
+  // ── Months frequency ───────────────────────────────────────────────────────
+  if (hasBreak) {
+    // ── Break pattern, iterate super-periods ──────────────────────────────
+    // Skip ahead to approximately the right super-period
+    const gapMs = new Date(rangeStart + 'T12:00:00Z').getTime()
+                - new Date(startDate  + 'T12:00:00Z').getTime();
+    const approxBreakMonths = breakUnit === 'months' ? bCount
+      : breakUnit === 'weeks' ? bCount / 4.33 : bCount / 30;
+    const spMonths = aBlock * fv + approxBreakMonths;
+    const skipSP   = gapMs > 0
+      ? Math.max(0, Math.floor(gapMs / (spMonths * 30 * 86_400_000)) - 2) : 0;
+
+    let blockStart = startDate;
+    let occIdx     = 0;
+    for (let i = 0; i < skipSP; i++) {
+      const blockEnd = addPeriod(blockStart, fv * aBlock, 'months');
+      occIdx    += aBlock;
+      blockStart = addPeriod(blockEnd, bCount, breakUnit);
+    }
+
+    let safety = 0;
+    while (blockStart <= rangeEnd && safety < 10_000) {
+      safety++;
+      for (let pos = 0; pos < aBlock; pos++) {
+        const cycleDate = pos === 0 ? blockStart : addPeriod(blockStart, fv * pos, 'months');
+        if (endDate && cycleDate > endDate) return results;
+        if (cycleDate > rangeEnd) return results;
+        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx });
+        occIdx++;
+      }
+      const blockEnd = addPeriod(blockStart, fv * aBlock, 'months');
+      const next     = addPeriod(blockEnd, bCount, breakUnit);
+      if (next <= blockEnd) break;
+      blockStart = next;
+    }
+    return results;
+  }
+
+  // ── Months, no break: iterative ────────────────────────────────────────────
   const gapMs    = new Date(rangeStart + 'T12:00:00Z').getTime()
                  - new Date(startDate  + 'T12:00:00Z').getTime();
   const skipCount = gapMs > 0
@@ -216,7 +304,10 @@ function computeReminders(treatment, rules, weekStart, weekEnd, dismissed) {
     treatment.frequency_unit,
     treatment.last_treatment_date || null,
     searchStart,
-    searchEnd
+    searchEnd,
+    treatment.active_block_count || 0,
+    treatment.break_count        || 0,
+    treatment.break_unit         || 'weeks'
   );
 
   for (const { date: cycleDate, cycleIndex } of cycles) {
@@ -279,7 +370,10 @@ function computeReminderDates(treatment, rules, rangeStart, rangeEnd) {
     treatment.frequency_unit,
     treatment.last_treatment_date || null,
     searchStart,
-    searchEnd
+    searchEnd,
+    treatment.active_block_count || 0,
+    treatment.break_count        || 0,
+    treatment.break_unit         || 'weeks'
   );
 
   const result = {};
@@ -346,8 +440,9 @@ router.post('/:pid', authTherapist, async (req, res) => {
   await pool.query(`
     INSERT INTO patient_treatments
     (id, patient_id, name, treatment_type, frequency_value, frequency_unit,
-     start_date, last_treatment_date, notes, is_active)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+     start_date, last_treatment_date, notes, is_active,
+     active_block_count, break_count, break_unit)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
   `, [
     id, req.params.pid, b.name,
     b.treatment_type      || '',
@@ -357,6 +452,9 @@ router.post('/:pid', authTherapist, async (req, res) => {
     b.last_treatment_date || null,
     b.notes               || '',
     b.is_active !== false,
+    Number(b.active_block_count) || 0,
+    Number(b.break_count)        || 1,
+    b.break_unit                 || 'weeks',
   ]);
 
   const { rows } = await pool.query('SELECT * FROM patient_treatments WHERE id=$1', [id]);
@@ -372,8 +470,9 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
   await pool.query(`
     UPDATE patient_treatments SET
       name=$1, treatment_type=$2, frequency_value=$3, frequency_unit=$4,
-      start_date=$5, last_treatment_date=$6, notes=$7, is_active=$8
-    WHERE id=$9 AND patient_id=$10
+      start_date=$5, last_treatment_date=$6, notes=$7, is_active=$8,
+      active_block_count=$9, break_count=$10, break_unit=$11
+    WHERE id=$12 AND patient_id=$13
   `, [
     b.name,
     b.treatment_type      || '',
@@ -383,6 +482,9 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     b.last_treatment_date || null,
     b.notes               || '',
     b.is_active !== false,
+    Number(b.active_block_count) || 0,
+    Number(b.break_count)        || 1,
+    b.break_unit                 || 'weeks',
     req.params.tid, req.params.pid,
   ]);
 
@@ -483,7 +585,10 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
       t.frequency_unit,
       t.last_treatment_date || null,
       week_start,
-      week_end
+      week_end,
+      t.active_block_count || 0,
+      t.break_count        || 0,
+      t.break_unit         || 'weeks'
     );
 
     for (const { date } of cycles) {

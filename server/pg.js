@@ -235,8 +235,26 @@ async function initDB() {
       last_treatment_date TEXT,
       notes TEXT DEFAULT '',
       is_active BOOLEAN DEFAULT TRUE,
+      active_block_count INTEGER DEFAULT 0,
+      break_count INTEGER DEFAULT 1,
+      break_unit TEXT DEFAULT 'weeks',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS active_block_count INTEGER DEFAULT 0;
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS break_count INTEGER DEFAULT 1;
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS break_unit TEXT DEFAULT 'weeks';
   `);
 
   // treatment_reminder_rules

@@ -10,6 +10,9 @@ const BLANK_TREATMENT = {
   last_treatment_date: '',
   notes: '',
   is_active: true,
+  active_block_count: 0,
+  break_count: 1,
+  break_unit: 'weeks',
 };
 
 const BLANK_RULE = {
@@ -35,18 +38,76 @@ function triggerDesc(rule) {
   return `${rule.offset_value} ${rule.offset_unit} ${dir} treatment`;
 }
 
+function addDaysClient(dateStr, n) {
+  const d = new Date(dateStr + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+function addPeriodClient(dateStr, value, unit) {
+  const n = Number(value);
+  const d = new Date(dateStr + 'T12:00:00Z');
+  if      (unit === 'days')  d.setUTCDate(d.getUTCDate()   + n);
+  else if (unit === 'weeks') d.setUTCDate(d.getUTCDate()   + n * 7);
+  else                       d.setUTCMonth(d.getUTCMonth() + n);
+  return d.toISOString().split('T')[0];
+}
+
 function nextCycleDate(t) {
   if (!t.start_date) return null;
-  const startMs = new Date(t.start_date).getTime();
-  const freqMs  = t.frequency_unit === 'days'
-    ? t.frequency_value * 86400000
-    : t.frequency_unit === 'weeks'
-      ? t.frequency_value * 7 * 86400000
-      : t.frequency_value * 30 * 86400000;
-  const now = Date.now();
-  if (startMs >= now) return t.start_date;
-  const n = Math.ceil((now - startMs) / freqMs);
-  return new Date(startMs + n * freqMs).toISOString().split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const fv       = Number(t.frequency_value) || 1;
+  const aBlock   = Number(t.active_block_count) || 0;
+  const bCount   = Number(t.break_count)        || 0;
+  const hasBreak = aBlock > 0 && bCount > 0;
+
+  if (!hasBreak) {
+    const startMs = new Date(t.start_date).getTime();
+    const freqMs  = t.frequency_unit === 'days'
+      ? fv * 86400000
+      : t.frequency_unit === 'weeks'
+        ? fv * 7 * 86400000
+        : fv * 30 * 86400000;
+    const now = Date.now();
+    if (startMs >= now) return t.start_date;
+    const n = Math.ceil((now - startMs) / freqMs);
+    return new Date(startMs + n * freqMs).toISOString().split('T')[0];
+  }
+
+  // Break pattern: iterate occurrences until we reach today or later
+  const limitStr = addDaysClient(todayStr, 365 * 5); // search up to 5 years ahead
+
+  if (t.frequency_unit !== 'months' && t.break_unit !== 'months') {
+    const periodDays      = t.frequency_unit === 'weeks' ? fv * 7 : fv;
+    const breakDays       = t.break_unit === 'weeks' ? bCount * 7 : bCount;
+    const superPeriodDays = aBlock * periodDays + breakDays;
+    for (let n = 0; n < 10000; n++) {
+      const sp           = Math.floor(n / aBlock);
+      const pos          = n % aBlock;
+      const cycleDate    = addDaysClient(t.start_date, sp * superPeriodDays + pos * periodDays);
+      if (cycleDate >= todayStr) return cycleDate;
+      if (cycleDate > limitStr)  return null;
+    }
+    return null;
+  }
+
+  // Months frequency or months break — iterate blocks
+  let blockStart = t.start_date;
+  for (let safety = 0; safety < 1000; safety++) {
+    for (let pos = 0; pos < aBlock; pos++) {
+      const cycleDate = t.frequency_unit === 'months'
+        ? (pos === 0 ? blockStart : addPeriodClient(blockStart, fv * pos, 'months'))
+        : addDaysClient(blockStart, pos * (t.frequency_unit === 'weeks' ? fv * 7 : fv));
+      if (cycleDate >= todayStr) return cycleDate;
+      if (cycleDate > limitStr)  return null;
+    }
+    const blockEnd = t.frequency_unit === 'months'
+      ? addPeriodClient(blockStart, fv * aBlock, 'months')
+      : addDaysClient(blockStart, aBlock * (t.frequency_unit === 'weeks' ? fv * 7 : fv));
+    blockStart = addPeriodClient(blockEnd, bCount, t.break_unit || 'weeks');
+    if (blockStart > limitStr) return null;
+  }
+  return null;
 }
 
 function fmtDate(str) {
@@ -58,10 +119,16 @@ function fmtDate(str) {
 function TreatmentForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState({ ...BLANK_TREATMENT, ...initial });
   function set(k, v) { setForm(f => ({ ...f, [k]: v })); }
+  const hasBreak = Number(form.active_block_count) > 0;
   function submit() {
     if (!form.name.trim()) return alert('Treatment name is required.');
     if (!form.start_date)  return alert('Start date is required.');
-    onSave(form);
+    if (hasBreak && !(Number(form.break_count) > 0)) return alert('Break duration must be at least 1.');
+    onSave({
+      ...form,
+      active_block_count: hasBreak ? Number(form.active_block_count) : 0,
+      break_count:        hasBreak ? Number(form.break_count)        : 1,
+    });
   }
   return (
     <div style={{ background: '#f8fafc', border: '1px solid var(--gray-200)', borderRadius: 12, padding: 16, marginBottom: 14 }}>
@@ -100,6 +167,35 @@ function TreatmentForm({ initial, onSave, onCancel }) {
           </label>
         </div>
       </div>
+
+      {/* Block + rest pattern */}
+      <div style={{ marginBottom: 10, background: hasBreak ? '#eff6ff' : 'transparent', border: hasBreak ? '1px solid #bfdbfe' : '1px solid transparent', borderRadius: 8, padding: hasBreak ? '10px 12px' : '0 12px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600, color: 'var(--gray-700)' }}>
+          <input type="checkbox" checked={hasBreak}
+            onChange={e => set('active_block_count', e.target.checked ? 3 : 0)} />
+          Enable block + rest pattern
+        </label>
+        {hasBreak && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>After</span>
+            <input className="form-input" type="number" min="1" value={form.active_block_count}
+              onChange={e => set('active_block_count', +e.target.value)}
+              style={{ width: 56, fontSize: 13 }} />
+            <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>treatments, rest for</span>
+            <input className="form-input" type="number" min="1" value={form.break_count}
+              onChange={e => set('break_count', +e.target.value)}
+              style={{ width: 56, fontSize: 13 }} />
+            <select className="form-input" value={form.break_unit}
+              onChange={e => set('break_unit', e.target.value)}
+              style={{ fontSize: 13 }}>
+              <option value="days">days</option>
+              <option value="weeks">weeks</option>
+              <option value="months">months</option>
+            </select>
+          </div>
+        )}
+      </div>
+
       <div style={{ marginBottom: 10 }}>
         <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 3 }}>Notes</label>
         <textarea className="form-input" rows={2} value={form.notes} onChange={e => set('notes', e.target.value)} placeholder="Any clinical notes..." />
@@ -280,7 +376,9 @@ export default function TreatmentSchedule({ patient }) {
                   </span>
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 2 }}>
-                  Every {t.frequency_value} {t.frequency_unit} · Next: {fmtDate(nextDate)}
+                  Every {t.frequency_value} {t.frequency_unit}
+                  {Number(t.active_block_count) > 0 && ` · ${t.active_block_count} on / ${t.break_count} ${t.break_unit} off`}
+                  {' · '}Next: {fmtDate(nextDate)}
                   {t.rules?.length > 0 && ` · ${t.rules.length} reminder rule${t.rules.length > 1 ? 's' : ''}`}
                 </div>
               </div>
