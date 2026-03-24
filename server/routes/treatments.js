@@ -41,19 +41,23 @@ function parseRule(r) {
 /** Return the YYYY-MM-DD string n calendar days after dateStr. */
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00Z');
-  d.setUTCDate(d.getUTCDate() + n);
+  d.setUTCDate(d.getUTCDate() + Number(n));
   return d.toISOString().split('T')[0];
 }
 
 /**
  * Add (value, unit) to a YYYY-MM-DD string.
- * Uses exact calendar arithmetic:  months advances the month counter (not 30 days).
+ * Uses exact calendar arithmetic: months advances the month counter (not 30 days).
+ * Coerces value to Number defensively — pg may return INTEGER columns as strings
+ * in certain driver/pooler configurations, which would cause the JS + operator to
+ * concatenate instead of add (e.g. 22 + "2" → "222").
  */
 function addPeriod(dateStr, value, unit) {
+  const n = Number(value);
   const d = new Date(dateStr + 'T12:00:00Z');
-  if      (unit === 'days')  d.setUTCDate(d.getUTCDate()   + value);
-  else if (unit === 'weeks') d.setUTCDate(d.getUTCDate()   + value * 7);
-  else                       d.setUTCMonth(d.getUTCMonth() + value);   // months
+  if      (unit === 'days')  d.setUTCDate(d.getUTCDate()   + n);
+  else if (unit === 'weeks') d.setUTCDate(d.getUTCDate()   + n * 7);
+  else                       d.setUTCMonth(d.getUTCMonth() + n);   // months
   return d.toISOString().split('T')[0];
 }
 
@@ -66,8 +70,9 @@ function addPeriod(dateStr, value, unit) {
 function applyOffset(cycleDateStr, triggerType, offsetValue, offsetUnit) {
   if (triggerType === 'on') return cycleDateStr;
   const sign = triggerType === 'before' ? -1 : 1;
-  if (offsetUnit === 'weeks') return addDays(cycleDateStr, sign * offsetValue * 7);
-  return addDays(cycleDateStr, sign * offsetValue); // days
+  const ov   = Number(offsetValue);
+  if (offsetUnit === 'weeks') return addDays(cycleDateStr, sign * ov * 7);
+  return addDays(cycleDateStr, sign * ov); // days
 }
 
 /** YYYY-MM-DD of the Sunday that begins the calendar week containing dateStr. */
@@ -111,9 +116,20 @@ function timingLabel(triggerType, offsetValue, offsetUnit) {
 function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd) {
   if (!startDate) return [];
 
-  // Skip count approximation — use milliseconds only to estimate how many
-  // full periods fit between startDate and rangeStart.
-  const approxFMs = freqValue * (
+  // Coerce to number — guards against pg returning integers as strings in
+  // certain driver / connection-pooler configurations.
+  const fv = Number(freqValue);
+  if (!fv || fv <= 0) return []; // 0, NaN, or negative frequency → nothing to generate
+
+  // A lastDate that is ≤ startDate means "one-time only" (the treatment already
+  // happened on its start date and will never recur).  Treat it as open-ended
+  // so we don't silently stop after the very first cycle when the caller left
+  // last_treatment_date set to the same value as start_date.
+  const effectiveLastDate = (lastDate && lastDate > startDate) ? lastDate : null;
+
+  // Skip count approximation — ms math only to estimate how many full periods
+  // fit between startDate and rangeStart (used for performance, not correctness).
+  const approxFMs = fv * (
     freqUnit === 'days'  ? 86_400_000 :
     freqUnit === 'weeks' ? 7 * 86_400_000 :
     30 * 86_400_000       // months: rough estimate only
@@ -128,7 +144,7 @@ function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, 
   let current    = startDate;
   let cycleIndex = 0;
   for (let i = 0; i < skipCount; i++) {
-    const next = addPeriod(current, freqValue, freqUnit);
+    const next = addPeriod(current, fv, freqUnit);
     if (next <= current) return []; // zero-period safety
     current = next;
     cycleIndex++;
@@ -139,9 +155,9 @@ function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, 
   let safety = 0;
   while (current <= rangeEnd && safety < 10_000) {
     safety++;
-    if (lastDate && current > lastDate) break;
+    if (effectiveLastDate && current > effectiveLastDate) break;
     if (current >= rangeStart) results.push({ date: current, cycleIndex });
-    const next = addPeriod(current, freqValue, freqUnit);
+    const next = addPeriod(current, fv, freqUnit);
     if (next <= current) break; // zero-period safety
     current = next;
     cycleIndex++;
