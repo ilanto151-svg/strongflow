@@ -7,30 +7,49 @@ import ExerciseForm from './ExerciseForm';
 import CopyModal from './CopyModal';
 import MonthView from '../patient/MonthView';
 
+// Describes a reminder's timing in plain English.
+// Uses the fields now guaranteed to exist in reminder objects.
 function triggerDesc(r) {
   if (r.trigger_type === 'on')          return 'on treatment day';
   if (r.trigger_type === 'during_week') return 'during treatment week';
-  const dir = r.trigger_type === 'before' ? 'before' : 'after';
-  return `${r.offset_value} ${r.offset_unit} ${dir} treatment`;
+  const dir  = r.trigger_type === 'before' ? 'before' : 'after';
+  const unit = Number(r.offset_value) === 1
+    ? String(r.offset_unit).replace(/s$/, '')
+    : r.offset_unit;
+  return `${r.offset_value} ${unit} ${dir} treatment`;
 }
 
 export default function ExercisePlan({ patient }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset]   = useState(0);
   const [selectedDay, setSelectedDay] = useState(today());
-  const [exercises, setExercises]   = useState([]);
-  const [showAdd, setShowAdd]       = useState(false);
-  const [calView, setCalView]       = useState('week'); // 'week' | 'month'
-  const [loading, setLoading]       = useState(false);
-  const [reminders, setReminders]         = useState([]);
+  const [exercises, setExercises]     = useState([]);
+  const [showAdd, setShowAdd]         = useState(false);
+  const [calView, setCalView]         = useState('week'); // 'week' | 'month'
+  const [loading, setLoading]         = useState(false);
+
+  // Reminder banners (top of week view, dismissable)
+  const [reminders, setReminders]           = useState([]);
   const [dismissedLocal, setDismissedLocal] = useState(new Set());
-  const [treatmentDates, setTreatmentDates]           = useState({});
-  const [treatmentTooltip, setTreatmentTooltip]       = useState(null);
-  const [eventWeekData, setEventWeekData]             = useState({ reminders: [], markers: {} });
-  const [eventDismissed, setEventDismissed]           = useState(new Set());
-  const [eventTooltip, setEventTooltip]               = useState(null);
+
+  // Week-view calendar markers — two separate structures
+  const [treatmentDates, setTreatmentDates] = useState({});
+  const [reminderDates,  setReminderDates]  = useState({});
+
+  // Hover tooltips for the day-strip badges
+  const [treatmentTooltip, setTreatmentTooltip] = useState(null);
+  const [reminderTooltip,  setReminderTooltip]  = useState(null);
+
+  // Clinical events (separate feature)
+  const [eventWeekData, setEventWeekData]   = useState({ reminders: [], markers: {} });
+  const [eventDismissed, setEventDismissed] = useState(new Set());
+  const [eventTooltip,   setEventTooltip]   = useState(null);
+
+  // Month-view calendar markers
   const [monthYear, setMonthYear]                     = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [monthTreatmentDates, setMonthTreatmentDates] = useState({});
+  const [monthReminderDates,  setMonthReminderDates]  = useState({});
 
+  // ── Exercise load ──────────────────────────────────────────────────────────
   const load = useCallback(() => {
     if (!patient) return;
     setLoading(true);
@@ -42,34 +61,44 @@ export default function ExercisePlan({ patient }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const dayKey = dateToKey(selectedDay);
+  const dayKey      = dateToKey(selectedDay);
   const dayExercises = exercises.filter(e => e.day_key === dayKey);
 
   const weekStart = sundayOfWeekOffset(weekOffset);
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
+  const weekDays  = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
     return d;
   });
 
-  // Load treatment reminders + cycle dates for the current week
+  // ── Week-view data load ────────────────────────────────────────────────────
   useEffect(() => {
     if (!patient) return;
     const ws = localDateStr(weekDays[0]);
     const we = localDateStr(weekDays[6]);
+
+    // Dismissable reminder banners
     api.get(`/treatments/${patient.id}/reminders?week_start=${ws}&week_end=${we}`)
       .then(r => setReminders(r.data))
       .catch(() => setReminders([]));
+
+    // Calendar markers — response is { treatmentDates, reminderDates }
     api.get(`/treatments/${patient.id}/cycles?week_start=${ws}&week_end=${we}`)
-      .then(r => setTreatmentDates(r.data))
-      .catch(() => setTreatmentDates({}));
+      .then(r => {
+        setTreatmentDates(r.data.treatmentDates || {});
+        setReminderDates(r.data.reminderDates   || {});
+      })
+      .catch(() => { setTreatmentDates({}); setReminderDates({}); });
+
+    // Clinical events
     api.get(`/events/${patient.id}/week?week_start=${ws}&week_end=${we}`)
       .then(r => setEventWeekData(r.data))
       .catch(() => setEventWeekData({ reminders: [], markers: {} }));
+
     setEventDismissed(new Set());
   }, [patient, weekOffset]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load treatment cycle dates for the month view
+  // ── Month-view data load ───────────────────────────────────────────────────
   useEffect(() => {
     if (calView !== 'month' || !patient) return;
     const firstDay = new Date(monthYear.year, monthYear.month, 1);
@@ -77,10 +106,14 @@ export default function ExercisePlan({ patient }) {
     const ws = localDateStr(firstDay);
     const we = localDateStr(lastDay);
     api.get(`/treatments/${patient.id}/cycles?week_start=${ws}&week_end=${we}`)
-      .then(r => setMonthTreatmentDates(r.data))
-      .catch(() => setMonthTreatmentDates({}));
+      .then(r => {
+        setMonthTreatmentDates(r.data.treatmentDates || {});
+        setMonthReminderDates(r.data.reminderDates   || {});
+      })
+      .catch(() => { setMonthTreatmentDates({}); setMonthReminderDates({}); });
   }, [patient, calView, monthYear.year, monthYear.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Clinical event helpers ─────────────────────────────────────────────────
   async function dismissEvent(reminder) {
     const key = `${reminder.event_id}|${reminder.occurrence_date}|${reminder.reminder_kind}`;
     setEventDismissed(prev => new Set([...prev, key]));
@@ -106,10 +139,11 @@ export default function ExercisePlan({ patient }) {
     r => !eventDismissed.has(`${r.event_id}|${r.occurrence_date}|${r.reminder_kind}`)
   );
 
+  // ── Treatment reminder banner helpers ──────────────────────────────────────
   async function dismissReminder(reminder) {
     setDismissedLocal(prev => new Set([...prev, `${reminder.rule_id}|${reminder.occurrence_date}`]));
     await api.post(`/treatments/${patient.id}/dismiss`, {
-      rule_id: reminder.rule_id,
+      rule_id:         reminder.rule_id,
       occurrence_date: reminder.occurrence_date,
     }).catch(console.error);
   }
@@ -119,19 +153,13 @@ export default function ExercisePlan({ patient }) {
   );
   const todayStr = localDateStr(today());
 
+  // ── Exercise helpers ───────────────────────────────────────────────────────
   function hasExercise(date) {
-    const k = dateToKey(date);
-    return exercises.some(e => e.day_key === k);
+    return exercises.some(e => e.day_key === dateToKey(date));
   }
 
-  function hasReport(date) { return false; } // Reports handled separately
-
   async function addExercise(form) {
-    await api.post(`/exercises/${patient.id}`, {
-      ...form,
-      day_key: dayKey,
-      instance_id: uid(),
-    });
+    await api.post(`/exercises/${patient.id}`, { ...form, day_key: dayKey, instance_id: uid() });
     load();
     setShowAdd(false);
   }
@@ -146,8 +174,7 @@ export default function ExercisePlan({ patient }) {
     load();
   }
 
-  // ── Copy program ──────────────────────────────────────────────────────────
-  // copyModal: null | { mode: 'exercise'|'day'|'week', sourceLabel, srcDayKey, instanceId }
+  // ── Copy ──────────────────────────────────────────────────────────────────
   const [copyModal, setCopyModal] = useState(null);
 
   async function doCopy(params) {
@@ -163,6 +190,7 @@ export default function ExercisePlan({ patient }) {
     setCopyModal(null);
   }
 
+  // ── No patient selected ───────────────────────────────────────────────────
   if (!patient) {
     return (
       <div className="empty">
@@ -189,7 +217,7 @@ export default function ExercisePlan({ patient }) {
           <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>{patient.name} — exercise plan</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className={`btn btn-ghost${calView === 'week' ? ' active-tab' : ''}`} onClick={() => setCalView('week')}>Week</button>
+          <button className={`btn btn-ghost${calView === 'week'  ? ' active-tab' : ''}`} onClick={() => setCalView('week')}>Week</button>
           <button className={`btn btn-ghost${calView === 'month' ? ' active-tab' : ''}`} onClick={() => setCalView('month')}>Month</button>
           <button className="btn btn-ghost" onClick={() => setCopyModal({ mode: 'day', sourceLabel: `${DAYS[selectedDay.getDay()].slice(0,3)} — ${dayExercises.length} exercise${dayExercises.length !== 1 ? 's' : ''}`, srcDayKey: dayKey })}>📋 Day</button>
           <button className="btn btn-ghost" onClick={() => setCopyModal({ mode: 'week' })}>📋 Week</button>
@@ -200,6 +228,7 @@ export default function ExercisePlan({ patient }) {
         <MonthView
           exercises={exercises}
           treatmentDates={monthTreatmentDates}
+          reminderDates={monthReminderDates}
           onMonthChange={(y, m) => setMonthYear({ year: y, month: m })}
         />
       ) : (
@@ -214,7 +243,7 @@ export default function ExercisePlan({ patient }) {
             {weekOffset !== 0 && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setWeekOffset(0); setSelectedDay(today()); }}>Today</button>}
           </div>
 
-          {/* Treatment reminder banner */}
+          {/* Treatment reminder banners (dismissable) */}
           {visibleReminders.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               {visibleReminders.map((r, i) => {
@@ -231,7 +260,9 @@ export default function ExercisePlan({ patient }) {
                       <div style={{ fontSize: 12, fontWeight: 700, color: isToday ? '#991b1b' : '#92400e', marginBottom: 2 }}>
                         {isToday ? 'Today — ' : ''}{r.treatment_name} · {triggerDesc(r)}
                       </div>
-                      <div style={{ fontSize: 13, color: 'var(--gray-700)' }}>{r.message}</div>
+                      {r.message && (
+                        <div style={{ fontSize: 13, color: 'var(--gray-700)' }}>{r.message}</div>
+                      )}
                       <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>
                         Treatment cycle: {new Date(r.cycle_date + 'T12:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </div>
@@ -297,29 +328,49 @@ export default function ExercisePlan({ patient }) {
               const hasPlan    = hasExercise(d);
               const txList     = treatmentDates[dateStr];
               const hasTx      = txList && txList.length > 0;
+              const rmList     = reminderDates[dateStr];
+              const hasRm      = rmList && rmList.length > 0;
               const evList     = eventWeekData.markers[dateStr];
               const hasEv      = evList && evList.length > 0;
-              // highest priority colour for the dot
               const evPriority = hasEv
                 ? (evList.some(e => e.priority === 'important') ? 'important'
-                   : evList.some(e => e.priority === 'caution') ? 'caution' : 'info')
+                  : evList.some(e => e.priority === 'caution')  ? 'caution' : 'info')
                 : null;
               return (
                 <button key={key}
                   className={`day-tab${isSelected ? ' active' : ''}`}
                   onClick={() => setSelectedDay(d)}
-                  style={{ position: 'relative', paddingBottom: (hasTx || hasEv) ? 4 : undefined }}
+                  style={{ position: 'relative', paddingBottom: (hasTx || hasRm || hasEv) ? 4 : undefined }}
                 >
                   {DAYS[d.getDay()].slice(0, 3)} {d.getDate()}
-                  {isToday && !isSelected && <span style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)', border: '2px solid white' }} />}
+
+                  {/* Today indicator dot */}
+                  {isToday && !isSelected && (
+                    <span style={{ position: 'absolute', top: -4, right: -4, width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)', border: '2px solid white' }} />
+                  )}
+
+                  {/* Exercise dot */}
                   {hasPlan && <span className="rdot" />}
+
+                  {/* Treatment day badge (🎗️) */}
                   {hasTx && (
                     <span
                       style={{ display: 'block', fontSize: 11, lineHeight: 1, marginTop: 3, textAlign: 'center' }}
-                      onMouseEnter={e => { e.stopPropagation(); setTreatmentTooltip({ dateStr, rect: e.currentTarget.getBoundingClientRect() }); }}
+                      onMouseEnter={e => { e.stopPropagation(); setTreatmentTooltip({ dateStr, rect: e.currentTarget.getBoundingClientRect() }); setReminderTooltip(null); }}
                       onMouseLeave={() => setTreatmentTooltip(null)}
                     >🎗️</span>
                   )}
+
+                  {/* Reminder day badge (🔔) */}
+                  {hasRm && (
+                    <span
+                      style={{ display: 'block', fontSize: 10, lineHeight: 1, marginTop: 2, textAlign: 'center', opacity: 0.85 }}
+                      onMouseEnter={e => { e.stopPropagation(); setReminderTooltip({ dateStr, rect: e.currentTarget.getBoundingClientRect() }); setTreatmentTooltip(null); }}
+                      onMouseLeave={() => setReminderTooltip(null)}
+                    >🔔</span>
+                  )}
+
+                  {/* Clinical event badge */}
                   {hasEv && (
                     <span
                       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, marginTop: 2 }}
@@ -335,12 +386,12 @@ export default function ExercisePlan({ patient }) {
             })}
           </div>
 
-          {/* Treatment date tooltip */}
+          {/* Treatment day tooltip */}
           {treatmentTooltip && treatmentDates[treatmentTooltip.dateStr] && (
             <div style={{
               position: 'fixed',
-              top: treatmentTooltip.rect.bottom + 8,
-              left: Math.min(treatmentTooltip.rect.left, window.innerWidth - 260),
+              top:  treatmentTooltip.rect.bottom + 8,
+              left: Math.min(treatmentTooltip.rect.left, window.innerWidth - 270),
               zIndex: 9999,
               background: '#fff',
               border: '1px solid #fca5a5',
@@ -348,20 +399,53 @@ export default function ExercisePlan({ patient }) {
               padding: '10px 14px',
               boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
               minWidth: 200,
-              maxWidth: 260,
+              maxWidth: 270,
               pointerEvents: 'none',
             }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                🎗️ Oncology Treatment
+                🎗️ Treatment Day
               </div>
               {treatmentDates[treatmentTooltip.dateStr].map((t, i) => (
                 <div key={i} style={{ marginBottom: i < treatmentDates[treatmentTooltip.dateStr].length - 1 ? 8 : 0 }}>
                   <div style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</div>
-                  {t.treatment_type && <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.treatment_type}</div>}
-                  {t.notes && <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📝 {t.notes}</div>}
-                  {t.rule_messages?.map((msg, mi) => (
-                    <div key={mi} style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📋 {msg}</div>
-                  ))}
+                  {t.treatment_type && (
+                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.treatment_type}</div>
+                  )}
+                  {t.notes && (
+                    <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📝 {t.notes}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Reminder day tooltip */}
+          {reminderTooltip && reminderDates[reminderTooltip.dateStr] && (
+            <div style={{
+              position: 'fixed',
+              top:  reminderTooltip.rect.bottom + 8,
+              left: Math.min(reminderTooltip.rect.left, window.innerWidth - 290),
+              zIndex: 9999,
+              background: '#fff',
+              border: '1px solid #fde68a',
+              borderRadius: 10,
+              padding: '10px 14px',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
+              minWidth: 210,
+              maxWidth: 290,
+              pointerEvents: 'none',
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#92400e', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                🔔 Reminder
+              </div>
+              {reminderDates[reminderTooltip.dateStr].map((r, i) => (
+                <div key={i} style={{ marginBottom: i < reminderDates[reminderTooltip.dateStr].length - 1 ? 8 : 0 }}>
+                  {r.message && (
+                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--gray-800)', marginBottom: 2 }}>{r.message}</div>
+                  )}
+                  <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>
+                    {r.treatment_name} · {r.timing}
+                  </div>
                 </div>
               ))}
             </div>
@@ -371,7 +455,7 @@ export default function ExercisePlan({ patient }) {
           {eventTooltip && eventWeekData.markers[eventTooltip.dateStr] && (
             <div style={{
               position: 'fixed',
-              top: eventTooltip.rect.bottom + 8,
+              top:  eventTooltip.rect.bottom + 8,
               left: Math.min(eventTooltip.rect.left, window.innerWidth - 280),
               zIndex: 9999,
               background: '#fff',
@@ -392,12 +476,14 @@ export default function ExercisePlan({ patient }) {
                   <div key={i} style={{ marginBottom: i < eventWeekData.markers[eventTooltip.dateStr].length - 1 ? 10 : 0, borderLeft: `3px solid ${borderColor}`, paddingLeft: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: textColor }}>
                       {icon} {ev.title}
-                      {isReminder && <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--gray-400)', marginLeft: 4 }}>
-                        ({ev.kind === 'before' ? `${ev.offset_value} ${ev.offset_unit} before` : `${ev.offset_value} ${ev.offset_unit} after`})
-                      </span>}
+                      {isReminder && (
+                        <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--gray-400)', marginLeft: 4 }}>
+                          ({ev.kind === 'before' ? `${ev.offset_value} ${ev.offset_unit} before` : `${ev.offset_value} ${ev.offset_unit} after`})
+                        </span>
+                      )}
                     </div>
                     {ev.event_type && <div style={{ fontSize: 11, color: 'var(--gray-500)' }}>{ev.event_type}</div>}
-                    {ev.notes && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>📝 {ev.notes}</div>}
+                    {ev.notes      && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>📝 {ev.notes}</div>}
                   </div>
                 );
               })}
