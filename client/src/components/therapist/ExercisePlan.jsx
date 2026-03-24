@@ -23,11 +23,13 @@ export default function ExercisePlan({ patient }) {
   const [loading, setLoading]       = useState(false);
   const [reminders, setReminders]         = useState([]);
   const [dismissedLocal, setDismissedLocal] = useState(new Set());
-  const [treatmentDates, setTreatmentDates]     = useState({});
-  const [treatmentTooltip, setTreatmentTooltip] = useState(null);
-  const [eventWeekData, setEventWeekData]       = useState({ reminders: [], markers: {} });
-  const [eventDismissed, setEventDismissed]     = useState(new Set());
-  const [eventTooltip, setEventTooltip]         = useState(null);
+  const [treatmentDates, setTreatmentDates]           = useState({});
+  const [treatmentTooltip, setTreatmentTooltip]       = useState(null);
+  const [eventWeekData, setEventWeekData]             = useState({ reminders: [], markers: {} });
+  const [eventDismissed, setEventDismissed]           = useState(new Set());
+  const [eventTooltip, setEventTooltip]               = useState(null);
+  const [monthYear, setMonthYear]                     = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
+  const [monthTreatmentDates, setMonthTreatmentDates] = useState({});
 
   const load = useCallback(() => {
     if (!patient) return;
@@ -66,6 +68,18 @@ export default function ExercisePlan({ patient }) {
       .catch(() => setEventWeekData({ reminders: [], markers: {} }));
     setEventDismissed(new Set());
   }, [patient, weekOffset]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load treatment cycle dates for the month view
+  useEffect(() => {
+    if (calView !== 'month' || !patient) return;
+    const firstDay = new Date(monthYear.year, monthYear.month, 1);
+    const lastDay  = new Date(monthYear.year, monthYear.month + 1, 0);
+    const ws = localDateStr(firstDay);
+    const we = localDateStr(lastDay);
+    api.get(`/treatments/${patient.id}/cycles?week_start=${ws}&week_end=${we}`)
+      .then(r => setMonthTreatmentDates(r.data))
+      .catch(() => setMonthTreatmentDates({}));
+  }, [patient, calView, monthYear.year, monthYear.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function dismissEvent(reminder) {
     const key = `${reminder.event_id}|${reminder.occurrence_date}|${reminder.reminder_kind}`;
@@ -183,7 +197,11 @@ export default function ExercisePlan({ patient }) {
       </div>
 
       {calView === 'month' ? (
-        <MonthView exercises={exercises} />
+        <MonthView
+          exercises={exercises}
+          treatmentDates={monthTreatmentDates}
+          onMonthChange={(y, m) => setMonthYear({ year: y, month: m })}
+        />
       ) : (
         <>
           {/* Week navigation */}

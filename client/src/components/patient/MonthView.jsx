@@ -1,20 +1,26 @@
 import { useState } from 'react';
 import { TYPE_META } from '../../constants';
-import { dateToKey, today, isSameDay, fmtDate } from '../../utils/calendar';
+import { dateToKey, today, isSameDay, fmtDate, localDateStr } from '../../utils/calendar';
 
-export default function MonthView({ exercises }) {
+export default function MonthView({ exercises, treatmentDates = {}, onMonthChange }) {
   const t = today();
   const [year,  setYear]  = useState(t.getFullYear());
   const [month, setMonth] = useState(t.getMonth());
   const [selected, setSelected] = useState(null);
 
   function prevMonth() {
-    if (month === 0) { setMonth(11); setYear(y => y - 1); }
-    else setMonth(m => m - 1);
+    let y = year, m = month;
+    if (m === 0) { m = 11; y = y - 1; }
+    else m = m - 1;
+    setMonth(m); setYear(y);
+    onMonthChange && onMonthChange(y, m);
   }
   function nextMonth() {
-    if (month === 11) { setMonth(0); setYear(y => y + 1); }
-    else setMonth(m => m + 1);
+    let y = year, m = month;
+    if (m === 11) { m = 0; y = y + 1; }
+    else m = m + 1;
+    setMonth(m); setYear(y);
+    onMonthChange && onMonthChange(y, m);
   }
 
   // Build calendar grid
@@ -56,12 +62,17 @@ export default function MonthView({ exercises }) {
           const isToday = isSameDay(d, today());
           const isSel   = selected && isSameDay(d, selected);
           const types   = [...new Set(exs.map(e => e.type))];
+          const dateStr = localDateStr(d);
+          const txList  = treatmentDates[dateStr];
+          const hasTx   = txList && txList.length > 0;
           return (
             <button key={i}
               onClick={() => setSelected(isSel ? null : d)}
+              title={hasTx ? txList.map(t => t.name).join(', ') : undefined}
               style={{
-                padding: '6px 4px', borderRadius: 10, border: isSel ? '2px solid var(--blue)' : '1px solid var(--gray-200)',
-                background: isToday ? 'var(--blue-bg)' : '#fff',
+                padding: '6px 4px', borderRadius: 10,
+                border: isSel ? '2px solid var(--blue)' : hasTx ? '1.5px solid #fca5a5' : '1px solid var(--gray-200)',
+                background: isToday ? 'var(--blue-bg)' : hasTx ? '#fff5f5' : '#fff',
                 cursor: 'pointer', minHeight: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
                 boxShadow: isSel ? '0 0 0 2px rgba(29,78,216,.2)' : 'none',
               }}
@@ -70,6 +81,9 @@ export default function MonthView({ exercises }) {
               <div style={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
                 {types.map(tp => <span key={tp} style={{ fontSize: 10 }}>{TYPE_META[tp]?.icon}</span>)}
               </div>
+              {hasTx && (
+                <span style={{ fontSize: 11, lineHeight: 1, marginTop: 1 }}>🎗️</span>
+              )}
             </button>
           );
         })}
@@ -78,7 +92,14 @@ export default function MonthView({ exercises }) {
       {/* Selected day detail */}
       {selected && (
         <div style={{ marginTop: 20, padding: 16, background: '#fff', borderRadius: 16, border: '1px solid var(--gray-200)', boxShadow: 'var(--shadow)' }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>{fmtDate(selected)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <span style={{ fontWeight: 700 }}>{fmtDate(selected)}</span>
+            {treatmentDates[localDateStr(selected)]?.length > 0 && (
+              <span style={{ fontSize: 12, color: '#991b1b', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, padding: '2px 8px', fontWeight: 600 }}>
+                🎗️ {treatmentDates[localDateStr(selected)].map(t => t.name).join(', ')}
+              </span>
+            )}
+          </div>
           {selExs.length === 0 ? (
             <p style={{ color: 'var(--gray-400)', fontSize: 13 }}>No exercises scheduled.</p>
           ) : selExs.map(ex => {
