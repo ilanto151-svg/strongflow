@@ -106,59 +106,84 @@ function timingLabel(triggerType, offsetValue, offsetUnit) {
 // Returns every treatment occurrence whose date is within [rangeStart, rangeEnd]
 // (both YYYY-MM-DD strings, inclusive).
 //
-// Algorithm:
-//  1. Approximate how many periods to skip to reach rangeStart (ms math, just
-//     for the skip count — accuracy here only affects performance, not correctness).
-//  2. Walk forward using exact addPeriod() until we pass rangeEnd.
-//  3. Track cycleIndex (0 = start_date itself) for repeat_each_cycle logic.
+// For 'days' and 'weeks' frequencies the algorithm uses DIRECT INDEX COMPUTATION:
+//   cycleDate = addDays(startDate, cycleIndex × periodDays)
+//
+// This is immune to the PgBouncer / connection-pooler type-stripping bug where
+// pg returns INTEGER columns as JavaScript strings.  When that happens, the old
+// iterative approach did   d.setUTCDate(22 + "2")  →  string concat → "222"  →
+// setUTCDate(222) → October → loop exits after 1 cycle.
+// With direct computation the multiplied index is always a plain JS integer so
+// the arithmetic is always numeric addition, never string concatenation.
+//
+// For 'months' frequencies no fixed day-count exists, so we still iterate using
+// addPeriod (which already has Number() coercion).
+//
+// cycleIndex (0 = startDate itself) is preserved so reminder rules can check
+// repeat_each_cycle correctly.
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getCyclesInRange(startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd) {
   if (!startDate) return [];
 
-  // Coerce to number — guards against pg returning integers as strings in
-  // certain driver / connection-pooler configurations.
+  // Always coerce to number — guards against pg/PgBouncer returning INTEGER as string.
   const fv = Number(freqValue);
-  if (!fv || fv <= 0) return []; // 0, NaN, or negative frequency → nothing to generate
+  if (!fv || fv <= 0) return [];
 
-  // A lastDate that is ≤ startDate means "one-time only" (the treatment already
-  // happened on its start date and will never recur).  Treat it as open-ended
-  // so we don't silently stop after the very first cycle when the caller left
-  // last_treatment_date set to the same value as start_date.
-  const effectiveLastDate = (lastDate && lastDate > startDate) ? lastDate : null;
+  // Only treat last_treatment_date as a real end-date when it is strictly after
+  // start_date.  A value equal to start_date (or empty/null) means "no end".
+  const endDate = (lastDate && String(lastDate) > String(startDate))
+    ? String(lastDate)
+    : null;
 
-  // Skip count approximation — ms math only to estimate how many full periods
-  // fit between startDate and rangeStart (used for performance, not correctness).
-  const approxFMs = fv * (
-    freqUnit === 'days'  ? 86_400_000 :
-    freqUnit === 'weeks' ? 7 * 86_400_000 :
-    30 * 86_400_000       // months: rough estimate only
-  );
-  const gapMs = new Date(rangeStart + 'T12:00:00Z').getTime()
-              - new Date(startDate  + 'T12:00:00Z').getTime();
-  const skipCount = (approxFMs > 0 && gapMs > 0)
-    ? Math.max(0, Math.floor(gapMs / approxFMs) - 2)
+  const results = [];
+
+  // ── Days / Weeks: direct index computation ─────────────────────────────────
+  if (freqUnit === 'days' || freqUnit === 'weeks') {
+    const periodDays = freqUnit === 'weeks' ? fv * 7 : fv; // always a JS number
+
+    // Compute approximate first index at/after rangeStart to avoid iterating
+    // through thousands of past cycles.  Both dates are T12:00:00Z so the gap
+    // is always an exact integer number of days — Math.round is just insurance.
+    const gapMs   = new Date(rangeStart + 'T12:00:00Z').getTime()
+                  - new Date(startDate  + 'T12:00:00Z').getTime();
+    const gapDays  = Math.round(gapMs / 86_400_000);
+    const firstIdx = Math.max(0, Math.floor(gapDays / periodDays) - 1); // back up 1
+
+    for (let idx = firstIdx; idx < firstIdx + 10_000; idx++) {
+      const cycleDate = addDays(startDate, idx * periodDays); // always numeric
+      if (cycleDate > rangeEnd) break;
+      if (endDate && cycleDate > endDate) break;
+      if (cycleDate >= rangeStart) {
+        results.push({ date: cycleDate, cycleIndex: idx });
+      }
+    }
+    return results;
+  }
+
+  // ── Months: iterative (no fixed day count) ─────────────────────────────────
+  const gapMs    = new Date(rangeStart + 'T12:00:00Z').getTime()
+                 - new Date(startDate  + 'T12:00:00Z').getTime();
+  const skipCount = gapMs > 0
+    ? Math.max(0, Math.floor(gapMs / (fv * 30 * 86_400_000)) - 2)
     : 0;
 
-  // Fast-forward to near rangeStart using exact addPeriod
   let current    = startDate;
   let cycleIndex = 0;
   for (let i = 0; i < skipCount; i++) {
-    const next = addPeriod(current, fv, freqUnit);
-    if (next <= current) return []; // zero-period safety
+    const next = addPeriod(current, fv, 'months');
+    if (next <= current) return [];
     current = next;
     cycleIndex++;
   }
 
-  // Collect every cycle that lands inside [rangeStart, rangeEnd]
-  const results = [];
   let safety = 0;
   while (current <= rangeEnd && safety < 10_000) {
     safety++;
-    if (effectiveLastDate && current > effectiveLastDate) break;
+    if (endDate && current > endDate) break;
     if (current >= rangeStart) results.push({ date: current, cycleIndex });
-    const next = addPeriod(current, fv, freqUnit);
-    if (next <= current) break; // zero-period safety
+    const next = addPeriod(current, fv, 'months');
+    if (next <= current) break;
     current = next;
     cycleIndex++;
   }
