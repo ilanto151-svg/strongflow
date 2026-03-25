@@ -12,10 +12,10 @@ const METRICS = [
 const SVG_W  = 560;
 const PAD_L  = 22;   // Y-axis label space
 const PAD_R  = 8;
-const PAD_T  = 20;   // room for 🎗️ emoji above plot
+const PAD_T  = 22;   // room for emoji markers above plot
 const PAD_B  = 30;   // X-axis label space
 const PLOT_H = 90;
-const SVG_H  = PAD_T + PLOT_H + PAD_B;  // 140
+const SVG_H  = PAD_T + PLOT_H + PAD_B;  // 142
 const PLOT_W = SVG_W - PAD_L - PAD_R;   // 530
 
 // ── Date range helpers ────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ function getDateRange(period, offset) {
     return { start, end };
   }
 
-  // year: rolling 12-month window ending today (or offset * 12 months back)
+  // year: rolling 12-month window
   const end   = new Date(now.getFullYear(), now.getMonth() + offset * 12, now.getDate());
   const start = new Date(end.getFullYear() - 1, end.getMonth(), end.getDate() + 1);
   return { start, end };
@@ -59,7 +59,7 @@ function buildPoints(reports, metric, period, offset) {
 
   if (period === 'week') {
     return Array.from({ length: 7 }, (_, i) => {
-      const d   = new Date(start);
+      const d = new Date(start);
       d.setDate(start.getDate() + i);
       const r = reports.find(r => r.day_key === dateToKey(d));
       return { date: d, value: r?.[metric] ?? null };
@@ -74,7 +74,7 @@ function buildPoints(reports, metric, period, offset) {
     });
   }
 
-  // year: weekly averages, iterate 7 days at a time
+  // year: weekly averages
   const pts = [];
   const cur = new Date(start);
   while (cur <= end) {
@@ -97,14 +97,104 @@ function buildPoints(reports, metric, period, offset) {
   return pts;
 }
 
+// ── Marker builder ─────────────────────────────────────────────────────────────
+//
+// Converts a { "YYYY-MM-DD": [item, ...] } dict into an array of
+// { x, dateStr, items } objects positioned within the SVG plot area.
+// Items that fall within 4px of each other are merged into one marker.
+
+function buildMarkers(datesDict, rangeStart, spanMs) {
+  const raw = Object.entries(datesDict || {})
+    .map(([dateStr, items]) => {
+      const ms = new Date(dateStr + 'T12:00:00Z').getTime();
+      const x  = PAD_L + ((ms - rangeStart) / spanMs) * PLOT_W;
+      return { x, dateStr, items: Array.isArray(items) ? items : [] };
+    })
+    .filter(m => m.x >= PAD_L - 8 && m.x <= PAD_L + PLOT_W + 8);
+
+  // Merge nearby markers so we don't clutter dense month/year views
+  return raw.reduce((acc, m) => {
+    const hit = acc.find(a => Math.abs(a.x - m.x) < 4);
+    if (hit) {
+      hit.items = [...hit.items, ...m.items];
+    } else {
+      acc.push({ x: m.x, dateStr: m.dateStr, items: [...m.items] });
+    }
+    return acc;
+  }, []);
+}
+
+// ── Marker tooltip ─────────────────────────────────────────────────────────────
+
+function MarkerTooltip({ tip }) {
+  if (!tip) return null;
+  const date = new Date(tip.dateStr + 'T12:00:00Z')
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top:  tip.clientY - 16,
+      left: tip.clientX + 14,
+      background: '#1e293b', color: '#f8fafc',
+      borderRadius: 10, padding: '10px 14px',
+      fontSize: 12,
+      pointerEvents: 'none', zIndex: 9999,
+      maxWidth: 270,
+      boxShadow: '0 6px 24px rgba(0,0,0,.35)',
+      lineHeight: 1.45,
+    }}>
+      {tip.type === 'treatment' ? (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#fca5a5', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 7 }}>
+            🎗️ Treatment Day
+          </div>
+          {tip.items.map((tx, i) => (
+            <div key={i} style={{ marginBottom: i < tip.items.length - 1 ? 8 : 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13 }}>{tx.name}</div>
+              {tx.treatment_type && (
+                <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 1 }}>{tx.treatment_type}</div>
+              )}
+              {tx.notes && (
+                <div style={{ color: '#cbd5e1', fontSize: 11, marginTop: 3, fontStyle: 'italic' }}>{tx.notes}</div>
+              )}
+            </div>
+          ))}
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#fde68a', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 7 }}>
+            🔔 Reminder
+          </div>
+          {tip.items.map((rm, i) => (
+            <div key={i} style={{ marginBottom: i < tip.items.length - 1 ? 8 : 0 }}>
+              {rm.message && (
+                <div style={{ fontWeight: 700, fontSize: 13 }}>{rm.message}</div>
+              )}
+              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 1 }}>{rm.treatment_name}</div>
+              {rm.timing && (
+                <div style={{ color: '#fbbf24', fontSize: 11, marginTop: 2 }}>· {rm.timing}</div>
+              )}
+            </div>
+          ))}
+        </>
+      )}
+      <div style={{ fontSize: 10, color: '#64748b', marginTop: 7, borderTop: '1px solid #334155', paddingTop: 5 }}>
+        {date}
+      </div>
+    </div>
+  );
+}
+
 // ── SVG line chart ────────────────────────────────────────────────────────────
 
-function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd, showMarkers }) {
-  const [tip, setTip] = useState(null);
+function LineChart({ points, color, period, treatmentDates, reminderDates, rangeStart, rangeEnd, showMarkers }) {
+  const [tip,       setTip]       = useState(null); // data-point tooltip
+  const [markerTip, setMarkerTip] = useState(null); // marker tooltip
 
-  const n    = points.length;
-  const xOf  = i => PAD_L + (n <= 1 ? PLOT_W / 2 : (i / (n - 1)) * PLOT_W);
-  const yOf  = v => PAD_T + PLOT_H * (1 - v / 10);
+  const n   = points.length;
+  const xOf = i => PAD_L + (n <= 1 ? PLOT_W / 2 : (i / (n - 1)) * PLOT_W);
+  const yOf = v => PAD_T + PLOT_H * (1 - v / 10);
 
   const nonNull = points.filter(p => p.value !== null);
 
@@ -121,18 +211,9 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
   });
   if (seg.length >= 2) segments.push(seg);
 
-  // Treatment marker X positions (proportional in time range)
-  const spanMs = Math.max(rangeEnd - rangeStart, 1);
-  let txX = showMarkers ? (treatmentDates || []).flatMap(dateStr => {
-    const ms = new Date(dateStr + 'T12:00:00Z').getTime();
-    if (ms < rangeStart || ms > rangeEnd + 86400000) return [];
-    return [PAD_L + ((ms - rangeStart) / spanMs) * PLOT_W];
-  }) : [];
-  // Deduplicate markers closer than 4px (avoids clutter in dense monthly view)
-  txX = txX.reduce((acc, x) => {
-    if (acc.every(ax => Math.abs(ax - x) >= 4)) acc.push(x);
-    return acc;
-  }, []);
+  const spanMs    = Math.max(rangeEnd - rangeStart, 1);
+  const txMarkers = showMarkers ? buildMarkers(treatmentDates, rangeStart, spanMs) : [];
+  const rmMarkers = showMarkers ? buildMarkers(reminderDates,  rangeStart, spanMs) : [];
 
   if (nonNull.length === 0) {
     return (
@@ -154,13 +235,33 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
           </g>
         ))}
 
-        {/* Treatment day markers */}
-        {txX.map((x, i) => (
-          <g key={i}>
-            <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + PLOT_H} stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="4,3" />
-            <text x={x} y={PAD_T - 3} textAnchor="middle" fontSize={11}>🎗️</text>
+        {/* ── Treatment markers (red dashed, 🎗️) ─────────────────────── */}
+        {txMarkers.map((m, i) => (
+          <g key={`tx${i}`} style={{ cursor: 'pointer' }}
+            onMouseEnter={e => setMarkerTip({ type: 'treatment', ...m, clientX: e.clientX, clientY: e.clientY })}
+            onMouseLeave={() => setMarkerTip(null)}>
+            {/* Wider transparent hit target */}
+            <rect x={m.x - 8} y={0} width={16} height={SVG_H} fill="transparent" />
+            <line x1={m.x} y1={PAD_T} x2={m.x} y2={PAD_T + PLOT_H}
+              stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="4,3" />
+            <text x={m.x} y={PAD_T - 5} textAnchor="middle" fontSize={12}>🎗️</text>
           </g>
         ))}
+
+        {/* ── Reminder markers (amber dashed, 🔔, offset +2px) ─────────── */}
+        {rmMarkers.map((m, i) => {
+          const rx = m.x + 2; // slight offset so both are visible on same-day overlap
+          return (
+            <g key={`rm${i}`} style={{ cursor: 'pointer' }}
+              onMouseEnter={e => setMarkerTip({ type: 'reminder', ...m, clientX: e.clientX, clientY: e.clientY })}
+              onMouseLeave={() => setMarkerTip(null)}>
+              <rect x={rx - 7} y={0} width={14} height={SVG_H} fill="transparent" />
+              <line x1={rx} y1={PAD_T} x2={rx} y2={PAD_T + PLOT_H}
+                stroke="#fde68a" strokeWidth={1.5} strokeDasharray="3,3" />
+              <text x={rx} y={PAD_T - 5} textAnchor="middle" fontSize={11}>🔔</text>
+            </g>
+          );
+        })}
 
         {/* Area fill under each segment */}
         {segments.map((seg, i) => (
@@ -178,7 +279,7 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
           />
         ))}
 
-        {/* Data dots with hover */}
+        {/* Data dots with hover — rendered last so they sit above markers */}
         {points.map((pt, i) => {
           if (pt.value === null) return null;
           const hovered = tip?.i === i;
@@ -212,7 +313,6 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
                 const d = pt.date.getDate();
                 if (d === 1 || d % 5 === 0) lbl = String(d);
               } else {
-                // year: month abbreviation at the first week of each month
                 if (pt.date.getDate() <= 7) lbl = pt.date.toLocaleDateString('en-GB', { month: 'short' });
               }
               if (!lbl) return null;
@@ -225,8 +325,8 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
         }
       </svg>
 
-      {/* Hover tooltip */}
-      {tip && (
+      {/* Data-point hover tooltip */}
+      {tip && !markerTip && (
         <div style={{
           position: 'fixed',
           top:  tip.clientY - 58,
@@ -244,6 +344,9 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
           </div>
         </div>
       )}
+
+      {/* Marker hover tooltip */}
+      <MarkerTooltip tip={markerTip} />
     </div>
   );
 }
@@ -253,23 +356,30 @@ function LineChart({ points, color, period, treatmentDates, rangeStart, rangeEnd
 export default function ReportGraph({ patient, reports }) {
   const [period,  setPeriod]  = useState('week');
   const [offset,  setOffset]  = useState(0);
-  const [txDates, setTxDates] = useState([]);
+  const [txDates, setTxDates] = useState({}); // { "YYYY-MM-DD": [{name, treatment_type, notes}] }
+  const [rmDates, setRmDates] = useState({}); // { "YYYY-MM-DD": [{message, treatment_name, timing}] }
 
   function changePeriod(p) { setPeriod(p); setOffset(0); }
 
-  // Fetch treatment cycle dates for the visible range
+  // Fetch treatment cycle + reminder dates for the visible range
   useEffect(() => {
     if (!patient) return;
     const { start, end } = getDateRange(period, offset);
     api.get(`/treatments/${patient.id}/cycles?week_start=${localDateStr(start)}&week_end=${localDateStr(end)}`)
-      .then(r => setTxDates(Object.keys(r.data)))
-      .catch(() => setTxDates([]));
+      .then(r => {
+        setTxDates(r.data.treatmentDates || {});
+        setRmDates(r.data.reminderDates  || {});
+      })
+      .catch(() => { setTxDates({}); setRmDates({}); });
   }, [patient, period, offset]);
 
   const { start, end } = getDateRange(period, offset);
-  const rangeStartMs  = start.getTime();
-  const rangeEndMs    = end.getTime() + 86399999;
-  const showMarkers   = period !== 'year'; // yearly view is too dense for per-day markers
+  const rangeStartMs = start.getTime();
+  const rangeEndMs   = end.getTime() + 86399999;
+  const showMarkers  = period !== 'year';
+
+  const txCount = Object.keys(txDates).length;
+  const rmCount = Object.keys(rmDates).length;
 
   return (
     <div>
@@ -294,10 +404,12 @@ export default function ReportGraph({ patient, reports }) {
         </div>
       </div>
 
-      {/* Yearly treatment summary (individual markers are too dense) */}
-      {period === 'year' && txDates.length > 0 && (
-        <p style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 12px', marginBottom: 16 }}>
-          🎗️ {txDates.length} oncology treatment cycle{txDates.length !== 1 ? 's' : ''} in this period
+      {/* Year-view: individual markers are too dense, show a summary banner instead */}
+      {period === 'year' && (txCount > 0 || rmCount > 0) && (
+        <p style={{ fontSize: 12, color: '#78350f', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 14px', marginBottom: 16, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+          {txCount > 0 && <span>🎗️ {txCount} treatment cycle{txCount !== 1 ? 's' : ''}</span>}
+          {rmCount > 0 && <span>🔔 {rmCount} reminder event{rmCount !== 1 ? 's' : ''}</span>}
+          <span style={{ color: '#a16207' }}>in this period</span>
         </p>
       )}
 
@@ -340,6 +452,7 @@ export default function ReportGraph({ patient, reports }) {
               color={m.color}
               period={period}
               treatmentDates={txDates}
+              reminderDates={rmDates}
               rangeStart={rangeStartMs}
               rangeEnd={rangeEndMs}
               showMarkers={showMarkers}
@@ -348,10 +461,26 @@ export default function ReportGraph({ patient, reports }) {
         );
       })}
 
-      {showMarkers && txDates.length > 0 && (
-        <p style={{ fontSize: 11, color: 'var(--gray-400)', textAlign: 'center', marginTop: 4 }}>
-          🎗️ marks an oncology treatment day
-        </p>
+      {/* Legend */}
+      {showMarkers && (txCount > 0 || rmCount > 0) && (
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 6 }}>
+          {txCount > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="18" height="12" style={{ flexShrink: 0 }}>
+                <line x1="0" y1="6" x2="18" y2="6" stroke="#fca5a5" strokeWidth="1.5" strokeDasharray="4,3" />
+              </svg>
+              🎗️ treatment day
+            </span>
+          )}
+          {rmCount > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="18" height="12" style={{ flexShrink: 0 }}>
+                <line x1="0" y1="6" x2="18" y2="6" stroke="#fde68a" strokeWidth="1.5" strokeDasharray="3,3" />
+              </svg>
+              🔔 reminder day
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
