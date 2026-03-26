@@ -5,6 +5,7 @@ import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay
 import ExerciseCard from './ExerciseCard';
 import ExerciseForm from './ExerciseForm';
 import CopyModal from './CopyModal';
+import CrossPatientCopyModal from './CrossPatientCopyModal';
 import MonthView from '../patient/MonthView';
 
 // Describes a reminder's timing in plain English.
@@ -178,7 +179,7 @@ export default function ExercisePlan({ patient }) {
     load();
   }
 
-  // ── Copy ──────────────────────────────────────────────────────────────────
+  // ── Within-patient copy ────────────────────────────────────────────────────
   const [copyModal, setCopyModal] = useState(null);
 
   async function doCopy(params) {
@@ -192,6 +193,42 @@ export default function ExercisePlan({ patient }) {
     }
     load();
     setCopyModal(null);
+  }
+
+  // ── Cross-patient copy ─────────────────────────────────────────────────────
+  const [crossModal, setCrossModal] = useState(null);
+  // crossModal shape: { type: 'exercise'|'day'|'week', srcDayKey?, srcWeekOffset?, instanceId?, sourceLabel? }
+
+  async function doXCopy(params) {
+    // params: { dst_pid, dst_day_key?, dst_week_offset?, mode: 'append'|'replace' }
+    const type = crossModal.type;
+    try {
+      if (type === 'exercise') {
+        await api.post(`/exercises/${patient.id}/cross-copy-exercise`, {
+          instance_id: crossModal.instanceId,
+          dst_pid:     params.dst_pid,
+          dst_day_key: params.dst_day_key,
+          mode:        params.mode,
+        });
+      } else if (type === 'day') {
+        await api.post(`/exercises/${patient.id}/cross-copy-day`, {
+          src_day_key: crossModal.srcDayKey,
+          dst_pid:     params.dst_pid,
+          dst_day_key: params.dst_day_key,
+          mode:        params.mode,
+        });
+      } else {
+        await api.post(`/exercises/${patient.id}/cross-copy-week`, {
+          src_week_offset: crossModal.srcWeekOffset,
+          dst_pid:         params.dst_pid,
+          dst_week_offset: params.dst_week_offset,
+          mode:            params.mode,
+        });
+      }
+    } catch {
+      alert('Copy failed. Please try again.');
+    }
+    setCrossModal(null);
   }
 
   // ── No patient selected ───────────────────────────────────────────────────
@@ -220,11 +257,22 @@ export default function ExercisePlan({ patient }) {
           </h2>
           <p style={{ fontSize: 13, color: 'var(--gray-500)' }}>{patient.name} — exercise plan</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className={`btn btn-ghost${calView === 'week'  ? ' active-tab' : ''}`} onClick={() => setCalView('week')}>Week</button>
           <button className={`btn btn-ghost${calView === 'month' ? ' active-tab' : ''}`} onClick={() => setCalView('month')}>Month</button>
           <button className="btn btn-ghost" onClick={() => setCopyModal({ mode: 'day', sourceLabel: `${DAYS[selectedDay.getDay()].slice(0,3)} — ${dayExercises.length} exercise${dayExercises.length !== 1 ? 's' : ''}`, srcDayKey: dayKey })}>📋 Day</button>
           <button className="btn btn-ghost" onClick={() => setCopyModal({ mode: 'week' })}>📋 Week</button>
+          <span style={{ width: 1, background: 'var(--gray-200)', alignSelf: 'stretch', margin: '0 2px' }} />
+          <button className="btn btn-ghost" style={{ color: '#2563eb' }}
+            title="Copy this day's exercises to another patient"
+            onClick={() => setCrossModal({ type: 'day', srcDayKey: dayKey, sourceLabel: `${DAYS[selectedDay.getDay()].slice(0,3)} — ${dayExercises.length} exercise${dayExercises.length !== 1 ? 's' : ''}` })}>
+            📤 Day
+          </button>
+          <button className="btn btn-ghost" style={{ color: '#2563eb' }}
+            title="Copy this week's exercises to another patient"
+            onClick={() => setCrossModal({ type: 'week', srcWeekOffset: weekOffset })}>
+            📤 Week
+          </button>
         </div>
       </div>
 
@@ -542,6 +590,7 @@ export default function ExercisePlan({ patient }) {
                         onEdit={updated => editExercise(ex, updated)}
                         onDelete={() => deleteExercise(ex)}
                         onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
+                        onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
                       />
                     ))}
                   </div>
@@ -568,7 +617,7 @@ export default function ExercisePlan({ patient }) {
         </div>
       )}
 
-      {/* Copy modal */}
+      {/* Within-patient copy modal */}
       {copyModal && (
         <CopyModal
           mode={copyModal.mode}
@@ -578,6 +627,20 @@ export default function ExercisePlan({ patient }) {
           currentWeekOffset={weekOffset}
           onCopy={doCopy}
           onClose={() => setCopyModal(null)}
+        />
+      )}
+
+      {/* Cross-patient copy modal */}
+      {crossModal && (
+        <CrossPatientCopyModal
+          mode={crossModal.type}
+          sourcePatient={patient}
+          sourceLabel={crossModal.sourceLabel}
+          srcDayKey={crossModal.srcDayKey}
+          srcWeekOffset={crossModal.type === 'week' ? crossModal.srcWeekOffset : undefined}
+          instanceId={crossModal.instanceId}
+          onCopy={doXCopy}
+          onClose={() => setCrossModal(null)}
         />
       )}
     </div>

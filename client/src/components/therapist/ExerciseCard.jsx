@@ -4,7 +4,7 @@ import Modal from '../shared/Modal';
 import ExerciseForm from './ExerciseForm';
 import { ConfirmModal } from '../shared/Modal';
 
-export default function ExerciseCard({ ex, onEdit, onDelete, onCopy }) {
+export default function ExerciseCard({ ex, onEdit, onDelete, onCopy, onCrossPatientCopy }) {
   const [open, setOpen]       = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -26,7 +26,10 @@ export default function ExerciseCard({ ex, onEdit, onDelete, onCopy }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button className="icon-btn" title="Copy exercise" onClick={e => { e.stopPropagation(); onCopy(ex); }}>📋</button>
+            <button className="icon-btn" title="Copy exercise (same patient)" onClick={e => { e.stopPropagation(); onCopy(ex); }}>📋</button>
+            {onCrossPatientCopy && (
+              <button className="icon-btn" title="Copy exercise to another patient" onClick={e => { e.stopPropagation(); onCrossPatientCopy(ex); }}>📤</button>
+            )}
             <button className="icon-btn" onClick={e => { e.stopPropagation(); setEditing(true); }}>✏️</button>
             <button className="icon-btn" onClick={e => { e.stopPropagation(); setConfirming(true); }}>🗑️</button>
           </div>
