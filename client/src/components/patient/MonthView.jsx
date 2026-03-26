@@ -6,6 +6,7 @@ export default function MonthView({
   exercises,
   treatmentDates = {},
   reminderDates  = {},
+  pausedDates    = {},
   onMonthChange,
 }) {
   const t = today();
@@ -44,6 +45,7 @@ export default function MonthView({
   const selExs     = selected ? dayExs(selected) : [];
   const selTx      = selDateStr ? (treatmentDates[selDateStr] || []) : [];
   const selRm      = selDateStr ? (reminderDates[selDateStr]  || []) : [];
+  const selPm      = selDateStr ? (pausedDates[selDateStr]    || []) : [];
 
   return (
     <div>
@@ -76,6 +78,8 @@ export default function MonthView({
           const isStartDay = hasTx && txList.some(t => t.day_of_span === 1);
           const rmList     = reminderDates[dateStr];
           const hasRm      = rmList && rmList.length > 0;
+          const pmList     = pausedDates[dateStr];
+          const hasPause   = pmList && pmList.length > 0;
 
           // Border and background — start days are more vivid than continuation days
           const borderColor = isSel
@@ -83,13 +87,15 @@ export default function MonthView({
             : hasTx && isStartDay ? '#fca5a5'
             : hasTx ? '#fecaca'
             : hasRm ? '#fde68a'
+            : hasPause ? '#d6d3d1'
             : 'var(--gray-200)';
-          const borderWidth = isSel ? 2 : (hasTx || hasRm) ? 1.5 : 1;
+          const borderWidth = isSel ? 2 : (hasTx || hasRm || hasPause) ? 1.5 : 1;
           const bgColor     = isToday
             ? 'var(--blue-bg)'
             : hasTx && isStartDay ? '#fff5f5'
             : hasTx ? '#fff9f9'
             : hasRm ? '#fffdf0'
+            : hasPause ? '#fafaf9'
             : '#fff';
 
           return (
@@ -117,12 +123,13 @@ export default function MonthView({
                 </div>
               )}
 
-              {/* Treatment / reminder badges row */}
-              {(hasTx || hasRm) && (
+              {/* Treatment / reminder / pause badges row */}
+              {(hasTx || hasRm || hasPause) && (
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
                   {hasTx && isStartDay  && <span style={{ fontSize: 11, lineHeight: 1 }}>🎗️</span>}
                   {hasTx && !isStartDay && <span style={{ width: 14, height: 3, background: '#fca5a5', borderRadius: 2, display: 'inline-block' }} />}
                   {hasRm && <span style={{ fontSize: 10, lineHeight: 1 }}>🔔</span>}
+                  {hasPause && !hasTx && <span style={{ fontSize: 10, lineHeight: 1 }}>⏸</span>}
                 </div>
               )}
             </button>
@@ -136,6 +143,32 @@ export default function MonthView({
 
           {/* Date heading */}
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{fmtDate(selected)}</div>
+
+          {/* ── Pause section ── */}
+          {selPm.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#78716c', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                ⏸ Treatment Hold
+              </div>
+              {selPm.map((pm, i) => (
+                <div key={i} style={{
+                  background: '#fafaf9', border: '1px solid #d6d3d1',
+                  borderRadius: 8, padding: '8px 10px',
+                  marginBottom: i < selPm.length - 1 ? 6 : 0,
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: '#57534e' }}>
+                    {pm.name}
+                    {pm.treatment_type && (
+                      <span style={{ fontWeight: 400, color: '#78716c', marginLeft: 6 }}>{pm.treatment_type}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#78716c', marginTop: 2 }}>
+                    Scheduled cycle — currently on hold
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* ── Treatment section ── */}
           {selTx.length > 0 && (

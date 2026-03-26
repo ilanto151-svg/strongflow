@@ -125,7 +125,8 @@ function timingLabel(triggerType, offsetValue, offsetUnit) {
 
 function getCyclesInRange(
   startDate, freqValue, freqUnit, lastDate, rangeStart, rangeEnd,
-  activeBlockCount = 0, breakCount = 0, breakUnit = 'weeks'
+  activeBlockCount = 0, breakCount = 0, breakUnit = 'weeks',
+  pauseStart = null, pauseEnd = null
 ) {
   if (!startDate) return [];
 
@@ -142,6 +143,13 @@ function getCyclesInRange(
   const aBlock   = Number(activeBlockCount) || 0;
   const bCount   = Number(breakCount)       || 0;
   const hasBreak = aBlock > 0 && bCount > 0;
+
+  // Pause checker: returns true if cycleDate falls within the pause window.
+  const ps = pauseStart ? String(pauseStart) : null;
+  const pe = pauseEnd   ? String(pauseEnd)   : null;
+  const inPause = ps
+    ? (d => d >= ps && (!pe || d <= pe))
+    : () => false;
 
   const results = [];
 
@@ -163,13 +171,13 @@ function getCyclesInRange(
         : 0;
 
       for (let n = firstN; n < firstN + 10_000; n++) {
-        const sp           = Math.floor(n / aBlock);
-        const pos          = n % aBlock;
+        const sp            = Math.floor(n / aBlock);
+        const pos           = n % aBlock;
         const daysFromStart = sp * superPeriodDays + pos * periodDays;
-        const cycleDate    = addDays(startDate, daysFromStart);
+        const cycleDate     = addDays(startDate, daysFromStart);
         if (cycleDate > rangeEnd) break;
         if (endDate && cycleDate > endDate) break;
-        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: n });
+        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: n, isPaused: inPause(cycleDate) });
       }
       return results;
     }
@@ -185,7 +193,7 @@ function getCyclesInRange(
           const cycleDate = addDays(blockStart, pos * periodDays);
           if (endDate && cycleDate > endDate) return results;
           if (cycleDate > rangeEnd) return results;
-          if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx });
+          if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx, isPaused: inPause(cycleDate) });
           occIdx++;
         }
         const blockEnd = addDays(blockStart, aBlock * periodDays);
@@ -206,7 +214,7 @@ function getCyclesInRange(
       const cycleDate = addDays(startDate, idx * periodDays);
       if (cycleDate > rangeEnd) break;
       if (endDate && cycleDate > endDate) break;
-      if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: idx });
+      if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: idx, isPaused: inPause(cycleDate) });
     }
     return results;
   }
@@ -238,7 +246,7 @@ function getCyclesInRange(
         const cycleDate = pos === 0 ? blockStart : addPeriod(blockStart, fv * pos, 'months');
         if (endDate && cycleDate > endDate) return results;
         if (cycleDate > rangeEnd) return results;
-        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx });
+        if (cycleDate >= rangeStart) results.push({ date: cycleDate, cycleIndex: occIdx, isPaused: inPause(cycleDate) });
         occIdx++;
       }
       const blockEnd = addPeriod(blockStart, fv * aBlock, 'months');
@@ -269,7 +277,7 @@ function getCyclesInRange(
   while (current <= rangeEnd && safety < 10_000) {
     safety++;
     if (endDate && current > endDate) break;
-    if (current >= rangeStart) results.push({ date: current, cycleIndex });
+    if (current >= rangeStart) results.push({ date: current, cycleIndex, isPaused: inPause(current) });
     const next = addPeriod(current, fv, 'months');
     if (next <= current) break;
     current = next;
@@ -307,10 +315,13 @@ function computeReminders(treatment, rules, weekStart, weekEnd, dismissed) {
     searchEnd,
     treatment.active_block_count || 0,
     treatment.break_count        || 0,
-    treatment.break_unit         || 'weeks'
+    treatment.break_unit         || 'weeks',
+    treatment.pause_start_date   || null,
+    treatment.pause_end_date     || null
   );
 
-  for (const { date: cycleDate, cycleIndex } of cycles) {
+  for (const { date: cycleDate, cycleIndex, isPaused } of cycles) {
+    if (isPaused) continue; // no reminders during pause
     for (const rule of rules) {
       if (!rule.is_active) continue;
       if (!rule.repeat_each_cycle && cycleIndex > 0) continue;
@@ -373,12 +384,15 @@ function computeReminderDates(treatment, rules, rangeStart, rangeEnd) {
     searchEnd,
     treatment.active_block_count || 0,
     treatment.break_count        || 0,
-    treatment.break_unit         || 'weeks'
+    treatment.break_unit         || 'weeks',
+    treatment.pause_start_date   || null,
+    treatment.pause_end_date     || null
   );
 
   const result = {};
 
-  for (const { date: cycleDate, cycleIndex } of cycles) {
+  for (const { date: cycleDate, cycleIndex, isPaused } of cycles) {
+    if (isPaused) continue; // no reminder markers during pause
     for (const rule of rules) {
       if (!rule.is_active)                             continue;
       if (rule.trigger_type === 'during_week')         continue; // no single date
@@ -441,8 +455,9 @@ router.post('/:pid', authTherapist, async (req, res) => {
     INSERT INTO patient_treatments
     (id, patient_id, name, treatment_type, frequency_value, frequency_unit,
      start_date, last_treatment_date, notes, is_active,
-     active_block_count, break_count, break_unit, duration_days)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+     active_block_count, break_count, break_unit, duration_days,
+     pause_start_date, pause_end_date)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
   `, [
     id, req.params.pid, b.name,
     b.treatment_type      || '',
@@ -456,6 +471,8 @@ router.post('/:pid', authTherapist, async (req, res) => {
     Number(b.break_count)        || 1,
     b.break_unit                 || 'weeks',
     Math.max(1, Number(b.duration_days) || 1),
+    b.pause_start_date    || null,
+    b.pause_end_date      || null,
   ]);
 
   const { rows } = await pool.query('SELECT * FROM patient_treatments WHERE id=$1', [id]);
@@ -473,8 +490,8 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
       name=$1, treatment_type=$2, frequency_value=$3, frequency_unit=$4,
       start_date=$5, last_treatment_date=$6, notes=$7, is_active=$8,
       active_block_count=$9, break_count=$10, break_unit=$11,
-      duration_days=$12
-    WHERE id=$13 AND patient_id=$14
+      duration_days=$12, pause_start_date=$13, pause_end_date=$14
+    WHERE id=$15 AND patient_id=$16
   `, [
     b.name,
     b.treatment_type      || '',
@@ -488,6 +505,8 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     Number(b.break_count)        || 1,
     b.break_unit                 || 'weeks',
     Math.max(1, Number(b.duration_days) || 1),
+    b.pause_start_date    || null,
+    b.pause_end_date      || null,
     req.params.tid, req.params.pid,
   ]);
 
@@ -564,7 +583,7 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
 
   const { week_start, week_end } = req.query;
   if (!week_start || !week_end)
-    return res.json({ treatmentDates: {}, reminderDates: {} });
+    return res.json({ treatmentDates: {}, reminderDates: {}, pausedDates: {}, pausePeriods: [] });
 
   const { rows: treatments } = await pool.query(
     'SELECT * FROM patient_treatments WHERE patient_id=$1 AND is_active=true',
@@ -573,6 +592,8 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
 
   const treatmentDates = {};
   const reminderDates  = {};
+  const pausedDates    = {};
+  const pausePeriods   = [];
 
   for (const t of treatments) {
     const { rows: rules } = await pool.query(
@@ -580,6 +601,19 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
       [t.id]
     );
     const parsedRules = rules.map(parseRule);
+
+    const pauseStart = t.pause_start_date || null;
+    const pauseEnd   = t.pause_end_date   || null;
+
+    // Collect pause period metadata for SVG band rendering in ReportGraph
+    if (pauseStart) {
+      pausePeriods.push({
+        name:             t.name,
+        treatment_type:   t.treatment_type || '',
+        pause_start_date: pauseStart,
+        pause_end_date:   pauseEnd,
+      });
+    }
 
     // ── Treatment cycle dates (expanded by duration_days) ─────────────────
     //
@@ -599,26 +633,34 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
       week_end,
       t.active_block_count || 0,
       t.break_count        || 0,
-      t.break_unit         || 'weeks'
+      t.break_unit         || 'weeks',
+      pauseStart,
+      pauseEnd
     );
 
-    for (const { date: startDate } of cycles) {
+    for (const { date: startDate, isPaused } of cycles) {
       for (let d = 0; d < dur; d++) {
         const spanDate = d === 0 ? startDate : addDays(startDate, d);
         // Only populate dates actually inside the requested range.
         if (spanDate < week_start || spanDate > week_end) continue;
-        if (!treatmentDates[spanDate]) treatmentDates[spanDate] = [];
-        treatmentDates[spanDate].push({
+        const entry = {
           name:           t.name,
           treatment_type: t.treatment_type || '',
           notes:          t.notes          || '',
           duration_days:  dur,
           day_of_span:    d + 1,
-        });
+        };
+        if (isPaused) {
+          if (!pausedDates[spanDate]) pausedDates[spanDate] = [];
+          pausedDates[spanDate].push(entry);
+        } else {
+          if (!treatmentDates[spanDate]) treatmentDates[spanDate] = [];
+          treatmentDates[spanDate].push(entry);
+        }
       }
     }
 
-    // ── Reminder dates ─────────────────────────────────────────────────────
+    // ── Reminder dates (paused cycles already skipped inside computeReminderDates) ──
     const rDates = computeReminderDates(parseTreatment(t), parsedRules, week_start, week_end);
     for (const [date, items] of Object.entries(rDates)) {
       if (!reminderDates[date]) reminderDates[date] = [];
@@ -626,7 +668,7 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
     }
   }
 
-  res.json({ treatmentDates, reminderDates });
+  res.json({ treatmentDates, reminderDates, pausedDates, pausePeriods });
 });
 
 // ADD RULE

@@ -193,7 +193,7 @@ function MarkerTooltip({ tip }) {
 
 // ── SVG line chart ────────────────────────────────────────────────────────────
 
-function LineChart({ points, color, period, treatmentDates, reminderDates, rangeStart, rangeEnd, showMarkers }) {
+function LineChart({ points, color, period, treatmentDates, reminderDates, pausePeriods, rangeStart, rangeEnd, showMarkers }) {
   const [tip,       setTip]       = useState(null); // data-point tooltip
   const [markerTip, setMarkerTip] = useState(null); // marker tooltip
 
@@ -220,6 +220,15 @@ function LineChart({ points, color, period, treatmentDates, reminderDates, range
   const txMarkers = showMarkers ? buildMarkers(treatmentDates, rangeStart, spanMs) : [];
   const rmMarkers = showMarkers ? buildMarkers(reminderDates,  rangeStart, spanMs) : [];
 
+  // Pause bands: gray shaded rectangles behind the chart area
+  const pauseBands = (pausePeriods || []).map(pp => {
+    const startMs = new Date(pp.pause_start_date + 'T00:00:00Z').getTime();
+    const endMs   = new Date((pp.pause_end_date || pp.pause_start_date) + 'T23:59:59Z').getTime();
+    const x1 = PAD_L + ((startMs - rangeStart) / spanMs) * PLOT_W;
+    const x2 = PAD_L + ((endMs   - rangeStart) / spanMs) * PLOT_W;
+    return { x1: Math.max(PAD_L, x1), x2: Math.min(PAD_L + PLOT_W, x2), name: pp.name };
+  }).filter(b => b.x2 >= PAD_L && b.x1 <= PAD_L + PLOT_W && b.x2 > b.x1);
+
   if (nonNull.length === 0) {
     return (
       <div style={{ height: SVG_H, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gray-300)', fontSize: 12 }}>
@@ -231,6 +240,18 @@ function LineChart({ points, color, period, treatmentDates, reminderDates, range
   return (
     <div style={{ position: 'relative' }}>
       <svg viewBox={`0 0 ${SVG_W} ${SVG_H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
+
+        {/* ── Pause bands (behind everything) ───────────────────────────── */}
+        {pauseBands.map((band, i) => (
+          <rect key={`pause${i}`}
+            x={band.x1} y={PAD_T}
+            width={band.x2 - band.x1} height={PLOT_H}
+            fill="#94a3b8" fillOpacity={0.08}
+            stroke="#94a3b8" strokeWidth={0.5} strokeOpacity={0.25}
+          >
+            <title>⏸ {band.name} — on hold</title>
+          </rect>
+        ))}
 
         {/* Y-axis grid + labels */}
         {[0, 2, 4, 6, 8, 10].map(v => (
@@ -359,10 +380,11 @@ function LineChart({ points, color, period, treatmentDates, reminderDates, range
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function ReportGraph({ patient, reports }) {
-  const [period,  setPeriod]  = useState('week');
-  const [offset,  setOffset]  = useState(0);
-  const [txDates, setTxDates] = useState({}); // { "YYYY-MM-DD": [{name, treatment_type, notes}] }
-  const [rmDates, setRmDates] = useState({}); // { "YYYY-MM-DD": [{message, treatment_name, timing}] }
+  const [period,       setPeriod]       = useState('week');
+  const [offset,       setOffset]       = useState(0);
+  const [txDates,      setTxDates]      = useState({}); // { "YYYY-MM-DD": [{name, treatment_type, notes}] }
+  const [rmDates,      setRmDates]      = useState({}); // { "YYYY-MM-DD": [{message, treatment_name, timing}] }
+  const [pausePeriods, setPausePeriods] = useState([]); // [{ name, pause_start_date, pause_end_date }]
 
   function changePeriod(p) { setPeriod(p); setOffset(0); }
 
@@ -374,8 +396,9 @@ export default function ReportGraph({ patient, reports }) {
       .then(r => {
         setTxDates(r.data.treatmentDates || {});
         setRmDates(r.data.reminderDates  || {});
+        setPausePeriods(r.data.pausePeriods || []);
       })
-      .catch(() => { setTxDates({}); setRmDates({}); });
+      .catch(() => { setTxDates({}); setRmDates({}); setPausePeriods([]); });
   }, [patient, period, offset]);
 
   const { start, end } = getDateRange(period, offset);
@@ -383,8 +406,9 @@ export default function ReportGraph({ patient, reports }) {
   const rangeEndMs   = end.getTime() + 86399999;
   const showMarkers  = period !== 'year';
 
-  const txCount = Object.keys(txDates).length;
-  const rmCount = Object.keys(rmDates).length;
+  const txCount    = Object.keys(txDates).length;
+  const rmCount    = Object.keys(rmDates).length;
+  const pauseCount = pausePeriods.length;
 
   return (
     <div>
@@ -410,10 +434,11 @@ export default function ReportGraph({ patient, reports }) {
       </div>
 
       {/* Year-view: individual markers are too dense, show a summary banner instead */}
-      {period === 'year' && (txCount > 0 || rmCount > 0) && (
+      {period === 'year' && (txCount > 0 || rmCount > 0 || pauseCount > 0) && (
         <p style={{ fontSize: 12, color: '#78350f', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '6px 14px', marginBottom: 16, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-          {txCount > 0 && <span>🎗️ {txCount} treatment cycle{txCount !== 1 ? 's' : ''}</span>}
-          {rmCount > 0 && <span>🔔 {rmCount} reminder event{rmCount !== 1 ? 's' : ''}</span>}
+          {txCount    > 0 && <span>🎗️ {txCount} treatment cycle{txCount !== 1 ? 's' : ''}</span>}
+          {rmCount    > 0 && <span>🔔 {rmCount} reminder event{rmCount !== 1 ? 's' : ''}</span>}
+          {pauseCount > 0 && <span>⏸ {pauseCount} treatment hold{pauseCount !== 1 ? 's' : ''}</span>}
           <span style={{ color: '#a16207' }}>in this period</span>
         </p>
       )}
@@ -458,6 +483,7 @@ export default function ReportGraph({ patient, reports }) {
               period={period}
               treatmentDates={txDates}
               reminderDates={rmDates}
+              pausePeriods={pausePeriods}
               rangeStart={rangeStartMs}
               rangeEnd={rangeEndMs}
               showMarkers={showMarkers}
@@ -467,8 +493,8 @@ export default function ReportGraph({ patient, reports }) {
       })}
 
       {/* Legend */}
-      {showMarkers && (txCount > 0 || rmCount > 0) && (
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 6 }}>
+      {showMarkers && (txCount > 0 || rmCount > 0 || pauseCount > 0) && (
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 6, flexWrap: 'wrap' }}>
           {txCount > 0 && (
             <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
               <svg width="18" height="12" style={{ flexShrink: 0 }}>
@@ -483,6 +509,14 @@ export default function ReportGraph({ patient, reports }) {
                 <line x1="0" y1="6" x2="18" y2="6" stroke="#fde68a" strokeWidth="1.5" strokeDasharray="3,3" />
               </svg>
               🔔 reminder day
+            </span>
+          )}
+          {pauseCount > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <svg width="18" height="12" style={{ flexShrink: 0 }}>
+                <rect x="0" y="1" width="18" height="10" fill="#94a3b8" fillOpacity="0.15" stroke="#94a3b8" strokeWidth="0.5" />
+              </svg>
+              ⏸ treatment hold
             </span>
           )}
         </div>

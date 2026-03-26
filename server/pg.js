@@ -239,6 +239,8 @@ async function initDB() {
       break_count INTEGER DEFAULT 1,
       break_unit TEXT DEFAULT 'weeks',
       duration_days INTEGER DEFAULT 1,
+      pause_start_date TEXT DEFAULT NULL,
+      pause_end_date TEXT DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -261,6 +263,16 @@ async function initDB() {
   await pool.query(`
     ALTER TABLE patient_treatments
     ADD COLUMN IF NOT EXISTS duration_days INTEGER DEFAULT 1;
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS pause_start_date TEXT DEFAULT NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS pause_end_date TEXT DEFAULT NULL;
   `);
 
   // treatment_reminder_rules

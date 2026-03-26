@@ -14,6 +14,8 @@ const BLANK_TREATMENT = {
   break_count: 1,
   break_unit: 'weeks',
   duration_days: 1,
+  pause_start_date: '',
+  pause_end_date: '',
 };
 
 const BLANK_RULE = {
@@ -56,38 +58,52 @@ function addPeriodClient(dateStr, value, unit) {
 
 function nextCycleDate(t) {
   if (!t.start_date) return null;
-  const todayStr = new Date().toISOString().split('T')[0];
-  const fv       = Number(t.frequency_value) || 1;
-  const aBlock   = Number(t.active_block_count) || 0;
-  const bCount   = Number(t.break_count)        || 0;
-  const hasBreak = aBlock > 0 && bCount > 0;
+  const todayStr   = new Date().toISOString().split('T')[0];
+  const limitStr   = addDaysClient(todayStr, 365 * 5);
+  const fv         = Number(t.frequency_value) || 1;
+  const aBlock     = Number(t.active_block_count) || 0;
+  const bCount     = Number(t.break_count)        || 0;
+  const hasBreak   = aBlock > 0 && bCount > 0;
+  const pauseStart = t.pause_start_date || null;
+  const pauseEnd   = t.pause_end_date   || null;
+
+  // Returns true if date is inside the pause window.
+  function inPause(d) {
+    if (!pauseStart) return false;
+    if (d < pauseStart) return false;
+    if (pauseEnd && d > pauseEnd) return false;
+    return true;
+  }
 
   if (!hasBreak) {
-    const startMs = new Date(t.start_date).getTime();
+    const startMs = new Date(t.start_date + 'T12:00:00Z').getTime();
     const freqMs  = t.frequency_unit === 'days'
       ? fv * 86400000
       : t.frequency_unit === 'weeks'
         ? fv * 7 * 86400000
         : fv * 30 * 86400000;
     const now = Date.now();
-    if (startMs >= now) return t.start_date;
-    const n = Math.ceil((now - startMs) / freqMs);
-    return new Date(startMs + n * freqMs).toISOString().split('T')[0];
+    // Find first cycle index on or after today
+    let idx = startMs >= now ? 0 : Math.ceil((now - startMs) / freqMs);
+    for (let i = 0; i < 10000; i++) {
+      const candidate = new Date(startMs + (idx + i) * freqMs).toISOString().split('T')[0];
+      if (candidate > limitStr) return null;
+      if (!inPause(candidate)) return candidate;
+    }
+    return null;
   }
 
-  // Break pattern: iterate occurrences until we reach today or later
-  const limitStr = addDaysClient(todayStr, 365 * 5); // search up to 5 years ahead
-
+  // Break pattern: iterate occurrences until we find one >= today that is not paused
   if (t.frequency_unit !== 'months' && t.break_unit !== 'months') {
     const periodDays      = t.frequency_unit === 'weeks' ? fv * 7 : fv;
-    const breakDays       = t.break_unit === 'weeks' ? bCount * 7 : bCount;
+    const breakDays       = (t.break_unit || 'weeks') === 'weeks' ? bCount * 7 : bCount;
     const superPeriodDays = aBlock * periodDays + breakDays;
     for (let n = 0; n < 10000; n++) {
-      const sp           = Math.floor(n / aBlock);
-      const pos          = n % aBlock;
-      const cycleDate    = addDaysClient(t.start_date, sp * superPeriodDays + pos * periodDays);
-      if (cycleDate >= todayStr) return cycleDate;
-      if (cycleDate > limitStr)  return null;
+      const sp        = Math.floor(n / aBlock);
+      const pos       = n % aBlock;
+      const cycleDate = addDaysClient(t.start_date, sp * superPeriodDays + pos * periodDays);
+      if (cycleDate > limitStr) return null;
+      if (cycleDate >= todayStr && !inPause(cycleDate)) return cycleDate;
     }
     return null;
   }
@@ -99,8 +115,8 @@ function nextCycleDate(t) {
       const cycleDate = t.frequency_unit === 'months'
         ? (pos === 0 ? blockStart : addPeriodClient(blockStart, fv * pos, 'months'))
         : addDaysClient(blockStart, pos * (t.frequency_unit === 'weeks' ? fv * 7 : fv));
-      if (cycleDate >= todayStr) return cycleDate;
-      if (cycleDate > limitStr)  return null;
+      if (cycleDate > limitStr) return null;
+      if (cycleDate >= todayStr && !inPause(cycleDate)) return cycleDate;
     }
     const blockEnd = t.frequency_unit === 'months'
       ? addPeriodClient(blockStart, fv * aBlock, 'months')
@@ -201,6 +217,37 @@ function TreatmentForm({ initial, onSave, onCancel }) {
               <option value="weeks">weeks</option>
               <option value="months">months</option>
             </select>
+          </div>
+        )}
+      </div>
+
+      {/* Pause / hold section */}
+      <div style={{ marginBottom: 10, background: form.pause_start_date ? '#fafaf9' : 'transparent', border: form.pause_start_date ? '1px solid #d6d3d1' : '1px solid transparent', borderRadius: 8, padding: form.pause_start_date ? '10px 12px' : '0 12px' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', fontWeight: 600, color: 'var(--gray-700)' }}>
+          <input type="checkbox" checked={!!form.pause_start_date}
+            onChange={e => {
+              if (e.target.checked) set('pause_start_date', new Date().toISOString().split('T')[0]);
+              else { set('pause_start_date', ''); set('pause_end_date', ''); }
+            }} />
+          ⏸ Pause treatment (hold)
+        </label>
+        {form.pause_start_date && (
+          <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 2 }}>Pause from *</label>
+              <input className="form-input" type="date"
+                value={form.pause_start_date}
+                onChange={e => set('pause_start_date', e.target.value)} />
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 2 }}>Resume on (optional)</label>
+              <input className="form-input" type="date"
+                value={form.pause_end_date || ''}
+                onChange={e => set('pause_end_date', e.target.value)} />
+            </div>
+            <div style={{ fontSize: 11, color: '#78716c', paddingBottom: 2 }}>
+              Scheduled cycles during this window will be skipped.
+            </div>
           </div>
         )}
       </div>
@@ -367,6 +414,9 @@ export default function TreatmentSchedule({ patient }) {
         const isExpanded = expanded === t.id;
         const isEditing  = editing === t.id;
         const nextDate   = nextCycleDate(t);
+        const todayStr   = new Date().toISOString().split('T')[0];
+        const isPaused   = t.is_active && t.pause_start_date &&
+          (!t.pause_end_date || t.pause_end_date >= todayStr);
 
         return (
           <div key={t.id} style={{ border: '1px solid var(--gray-200)', borderRadius: 12, marginBottom: 10, overflow: 'hidden', background: '#fff' }}>
@@ -380,9 +430,19 @@ export default function TreatmentSchedule({ patient }) {
                   {t.treatment_type && (
                     <span style={{ fontSize: 11, background: '#dbeafe', color: '#1d4ed8', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>{t.treatment_type}</span>
                   )}
-                  <span style={{ fontSize: 11, background: t.is_active ? '#dcfce7' : '#f3f4f6', color: t.is_active ? '#166534' : 'var(--gray-500)', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
-                    {t.is_active ? '● Active' : '○ Inactive'}
-                  </span>
+                  {isPaused ? (
+                    <span style={{ fontSize: 11, background: '#fef3c7', color: '#92400e', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
+                      ⏸ Paused
+                    </span>
+                  ) : t.is_active ? (
+                    <span style={{ fontSize: 11, background: '#dcfce7', color: '#166534', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
+                      ● Active
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, background: '#f3f4f6', color: 'var(--gray-500)', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
+                      ○ Inactive
+                    </span>
+                  )}
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 2 }}>
                   Every {t.frequency_value} {t.frequency_unit}
@@ -421,6 +481,12 @@ export default function TreatmentSchedule({ patient }) {
                     <div><span style={{ color: 'var(--gray-400)' }}>Next expected:</span> {fmtDate(nextDate)}</div>
                     {Number(t.duration_days) > 1 && (
                       <div><span style={{ color: 'var(--gray-400)' }}>Duration:</span> {t.duration_days} days per cycle</div>
+                    )}
+                    {t.pause_start_date && (
+                      <div style={{ width: '100%', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '4px 10px', color: '#92400e' }}>
+                        ⏸ Paused {fmtDate(t.pause_start_date)}
+                        {t.pause_end_date ? ` → resumes ${fmtDate(t.pause_end_date)}` : ' (indefinite)'}
+                      </div>
                     )}
                     {t.notes && <div style={{ width: '100%', color: 'var(--gray-500)' }}>📝 {t.notes}</div>}
                   </div>

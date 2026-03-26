@@ -34,6 +34,7 @@ export default function ExercisePlan({ patient }) {
   // Week-view calendar markers — two separate structures
   const [treatmentDates, setTreatmentDates] = useState({});
   const [reminderDates,  setReminderDates]  = useState({});
+  const [pausedDates,    setPausedDates]    = useState({});
 
   // Hover tooltips for the day-strip badges
   const [treatmentTooltip, setTreatmentTooltip] = useState(null);
@@ -48,6 +49,7 @@ export default function ExercisePlan({ patient }) {
   const [monthYear, setMonthYear]                     = useState({ year: new Date().getFullYear(), month: new Date().getMonth() });
   const [monthTreatmentDates, setMonthTreatmentDates] = useState({});
   const [monthReminderDates,  setMonthReminderDates]  = useState({});
+  const [monthPausedDates,    setMonthPausedDates]    = useState({});
 
   // ── Exercise load ──────────────────────────────────────────────────────────
   const load = useCallback(() => {
@@ -82,13 +84,14 @@ export default function ExercisePlan({ patient }) {
       .then(r => setReminders(r.data))
       .catch(() => setReminders([]));
 
-    // Calendar markers — response is { treatmentDates, reminderDates }
+    // Calendar markers — response is { treatmentDates, reminderDates, pausedDates, pausePeriods }
     api.get(`/treatments/${patient.id}/cycles?week_start=${ws}&week_end=${we}`)
       .then(r => {
         setTreatmentDates(r.data.treatmentDates || {});
         setReminderDates(r.data.reminderDates   || {});
+        setPausedDates(r.data.pausedDates       || {});
       })
-      .catch(() => { setTreatmentDates({}); setReminderDates({}); });
+      .catch(() => { setTreatmentDates({}); setReminderDates({}); setPausedDates({}); });
 
     // Clinical events
     api.get(`/events/${patient.id}/week?week_start=${ws}&week_end=${we}`)
@@ -109,8 +112,9 @@ export default function ExercisePlan({ patient }) {
       .then(r => {
         setMonthTreatmentDates(r.data.treatmentDates || {});
         setMonthReminderDates(r.data.reminderDates   || {});
+        setMonthPausedDates(r.data.pausedDates       || {});
       })
-      .catch(() => { setMonthTreatmentDates({}); setMonthReminderDates({}); });
+      .catch(() => { setMonthTreatmentDates({}); setMonthReminderDates({}); setMonthPausedDates({}); });
   }, [patient, calView, monthYear.year, monthYear.month]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Clinical event helpers ─────────────────────────────────────────────────
@@ -229,6 +233,7 @@ export default function ExercisePlan({ patient }) {
           exercises={exercises}
           treatmentDates={monthTreatmentDates}
           reminderDates={monthReminderDates}
+          pausedDates={monthPausedDates}
           onMonthChange={(y, m) => setMonthYear({ year: y, month: m })}
         />
       ) : (
@@ -331,6 +336,8 @@ export default function ExercisePlan({ patient }) {
               const isStartDay = hasTx && txList.some(t => t.day_of_span === 1);
               const rmList     = reminderDates[dateStr];
               const hasRm      = rmList && rmList.length > 0;
+              const pmList     = pausedDates[dateStr];
+              const hasPause   = pmList && pmList.length > 0;
               const evList     = eventWeekData.markers[dateStr];
               const hasEv      = evList && evList.length > 0;
               const evPriority = hasEv
@@ -374,6 +381,14 @@ export default function ExercisePlan({ patient }) {
                       onMouseEnter={e => { e.stopPropagation(); setReminderTooltip({ dateStr, rect: e.currentTarget.getBoundingClientRect() }); setTreatmentTooltip(null); }}
                       onMouseLeave={() => setReminderTooltip(null)}
                     >🔔</span>
+                  )}
+
+                  {/* Pause badge (⏸) — only when no active treatment badge shown */}
+                  {hasPause && !hasTx && (
+                    <span
+                      style={{ display: 'block', fontSize: 10, lineHeight: 1, marginTop: 2, textAlign: 'center', opacity: 0.7 }}
+                      title={pmList.map(p => `${p.name} — on hold`).join(', ')}
+                    >⏸</span>
                   )}
 
                   {/* Clinical event badge */}
