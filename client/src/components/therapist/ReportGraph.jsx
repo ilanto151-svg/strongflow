@@ -155,6 +155,11 @@ function MarkerTooltip({ tip }) {
               {tx.treatment_type && (
                 <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 1 }}>{tx.treatment_type}</div>
               )}
+              {tx.duration_days > 1 && (
+                <div style={{ color: '#fca5a5', fontSize: 11, fontWeight: 600, marginTop: 2 }}>
+                  Day {tx.day_of_span} of {tx.duration_days}
+                </div>
+              )}
               {tx.notes && (
                 <div style={{ color: '#cbd5e1', fontSize: 11, marginTop: 3, fontStyle: 'italic' }}>{tx.notes}</div>
               )}

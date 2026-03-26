@@ -441,8 +441,8 @@ router.post('/:pid', authTherapist, async (req, res) => {
     INSERT INTO patient_treatments
     (id, patient_id, name, treatment_type, frequency_value, frequency_unit,
      start_date, last_treatment_date, notes, is_active,
-     active_block_count, break_count, break_unit)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+     active_block_count, break_count, break_unit, duration_days)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
   `, [
     id, req.params.pid, b.name,
     b.treatment_type      || '',
@@ -455,6 +455,7 @@ router.post('/:pid', authTherapist, async (req, res) => {
     Number(b.active_block_count) || 0,
     Number(b.break_count)        || 1,
     b.break_unit                 || 'weeks',
+    Math.max(1, Number(b.duration_days) || 1),
   ]);
 
   const { rows } = await pool.query('SELECT * FROM patient_treatments WHERE id=$1', [id]);
@@ -471,8 +472,9 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     UPDATE patient_treatments SET
       name=$1, treatment_type=$2, frequency_value=$3, frequency_unit=$4,
       start_date=$5, last_treatment_date=$6, notes=$7, is_active=$8,
-      active_block_count=$9, break_count=$10, break_unit=$11
-    WHERE id=$12 AND patient_id=$13
+      active_block_count=$9, break_count=$10, break_unit=$11,
+      duration_days=$12
+    WHERE id=$13 AND patient_id=$14
   `, [
     b.name,
     b.treatment_type      || '',
@@ -485,6 +487,7 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     Number(b.active_block_count) || 0,
     Number(b.break_count)        || 1,
     b.break_unit                 || 'weeks',
+    Math.max(1, Number(b.duration_days) || 1),
     req.params.tid, req.params.pid,
   ]);
 
@@ -578,26 +581,41 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
     );
     const parsedRules = rules.map(parseRule);
 
-    // ── Treatment cycle dates ──────────────────────────────────────────────
+    // ── Treatment cycle dates (expanded by duration_days) ─────────────────
+    //
+    // Each cycle occurrence starts on its recurrence date and spans
+    // duration_days consecutive days.  Reminders stay anchored to the start
+    // date (computed separately via computeReminderDates above).
+    const dur = Math.max(1, Number(t.duration_days) || 1);
+
     const cycles = getCyclesInRange(
       t.start_date,
       t.frequency_value,
       t.frequency_unit,
       t.last_treatment_date || null,
-      week_start,
+      // Expand the search window backwards by (dur-1) days so a cycle that
+      // starts just before week_start still fills in its continuation days.
+      addDays(week_start, -(dur - 1)),
       week_end,
       t.active_block_count || 0,
       t.break_count        || 0,
       t.break_unit         || 'weeks'
     );
 
-    for (const { date } of cycles) {
-      if (!treatmentDates[date]) treatmentDates[date] = [];
-      treatmentDates[date].push({
-        name:           t.name,
-        treatment_type: t.treatment_type || '',
-        notes:          t.notes          || '',
-      });
+    for (const { date: startDate } of cycles) {
+      for (let d = 0; d < dur; d++) {
+        const spanDate = d === 0 ? startDate : addDays(startDate, d);
+        // Only populate dates actually inside the requested range.
+        if (spanDate < week_start || spanDate > week_end) continue;
+        if (!treatmentDates[spanDate]) treatmentDates[spanDate] = [];
+        treatmentDates[spanDate].push({
+          name:           t.name,
+          treatment_type: t.treatment_type || '',
+          notes:          t.notes          || '',
+          duration_days:  dur,
+          day_of_span:    d + 1,
+        });
+      }
     }
 
     // ── Reminder dates ─────────────────────────────────────────────────────

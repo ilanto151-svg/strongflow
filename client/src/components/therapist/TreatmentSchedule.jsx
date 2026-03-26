@@ -13,6 +13,7 @@ const BLANK_TREATMENT = {
   active_block_count: 0,
   break_count: 1,
   break_unit: 'weeks',
+  duration_days: 1,
 };
 
 const BLANK_RULE = {
@@ -155,6 +156,14 @@ function TreatmentForm({ initial, onSave, onCancel }) {
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 3 }}>Start Date *</label>
           <input className="form-input" type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} />
+        </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 3 }}>Duration (days)</label>
+          <input className="form-input" type="number" min="1" max="365"
+            value={form.duration_days || 1}
+            onChange={e => set('duration_days', Math.max(1, +e.target.value))}
+            style={{ width: 80 }}
+          />
         </div>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 3 }}>Last Treatment Date</label>
@@ -378,6 +387,7 @@ export default function TreatmentSchedule({ patient }) {
                 <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 2 }}>
                   Every {t.frequency_value} {t.frequency_unit}
                   {Number(t.active_block_count) > 0 && ` · ${t.active_block_count} on / ${t.break_count} ${t.break_unit} off`}
+                  {Number(t.duration_days) > 1 && ` · ${t.duration_days}-day duration`}
                   {' · '}Next: {fmtDate(nextDate)}
                   {t.rules?.length > 0 && ` · ${t.rules.length} reminder rule${t.rules.length > 1 ? 's' : ''}`}
                 </div>
@@ -409,6 +419,9 @@ export default function TreatmentSchedule({ patient }) {
                     <div><span style={{ color: 'var(--gray-400)' }}>Start:</span> {fmtDate(t.start_date)}</div>
                     {t.last_treatment_date && <div><span style={{ color: 'var(--gray-400)' }}>Last:</span> {fmtDate(t.last_treatment_date)}</div>}
                     <div><span style={{ color: 'var(--gray-400)' }}>Next expected:</span> {fmtDate(nextDate)}</div>
+                    {Number(t.duration_days) > 1 && (
+                      <div><span style={{ color: 'var(--gray-400)' }}>Duration:</span> {t.duration_days} days per cycle</div>
+                    )}
                     {t.notes && <div style={{ width: '100%', color: 'var(--gray-500)' }}>📝 {t.notes}</div>}
                   </div>
                 )}

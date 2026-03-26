@@ -71,21 +71,24 @@ export default function MonthView({
           const isToday = isSameDay(d, today());
           const isSel   = selected && isSameDay(d, selected);
           const types   = [...new Set(exs.map(e => e.type))];
-          const txList  = treatmentDates[dateStr];
-          const hasTx   = txList && txList.length > 0;
-          const rmList  = reminderDates[dateStr];
-          const hasRm   = rmList && rmList.length > 0;
+          const txList     = treatmentDates[dateStr];
+          const hasTx      = txList && txList.length > 0;
+          const isStartDay = hasTx && txList.some(t => t.day_of_span === 1);
+          const rmList     = reminderDates[dateStr];
+          const hasRm      = rmList && rmList.length > 0;
 
-          // Border and background depend on what's on this day
+          // Border and background — start days are more vivid than continuation days
           const borderColor = isSel
             ? 'var(--blue)'
-            : hasTx ? '#fca5a5'
+            : hasTx && isStartDay ? '#fca5a5'
+            : hasTx ? '#fecaca'
             : hasRm ? '#fde68a'
             : 'var(--gray-200)';
           const borderWidth = isSel ? 2 : (hasTx || hasRm) ? 1.5 : 1;
           const bgColor     = isToday
             ? 'var(--blue-bg)'
-            : hasTx ? '#fff5f5'
+            : hasTx && isStartDay ? '#fff5f5'
+            : hasTx ? '#fff9f9'
             : hasRm ? '#fffdf0'
             : '#fff';
 
@@ -117,7 +120,8 @@ export default function MonthView({
               {/* Treatment / reminder badges row */}
               {(hasTx || hasRm) && (
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                  {hasTx && <span style={{ fontSize: 11, lineHeight: 1 }}>🎗️</span>}
+                  {hasTx && isStartDay  && <span style={{ fontSize: 11, lineHeight: 1 }}>🎗️</span>}
+                  {hasTx && !isStartDay && <span style={{ width: 14, height: 3, background: '#fca5a5', borderRadius: 2, display: 'inline-block' }} />}
                   {hasRm && <span style={{ fontSize: 10, lineHeight: 1 }}>🔔</span>}
                 </div>
               )}
@@ -141,7 +145,8 @@ export default function MonthView({
               </div>
               {selTx.map((tx, i) => (
                 <div key={i} style={{
-                  background: '#fef2f2', border: '1px solid #fca5a5',
+                  background: tx.day_of_span === 1 ? '#fef2f2' : '#fff5f5',
+                  border: `1px solid ${tx.day_of_span === 1 ? '#fca5a5' : '#fecaca'}`,
                   borderRadius: 8, padding: '8px 10px',
                   marginBottom: i < selTx.length - 1 ? 6 : 0,
                 }}>
@@ -151,6 +156,11 @@ export default function MonthView({
                       <span style={{ fontWeight: 400, color: '#b91c1c', marginLeft: 6 }}>{tx.treatment_type}</span>
                     )}
                   </div>
+                  {tx.duration_days > 1 && (
+                    <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 2, fontWeight: 600 }}>
+                      Day {tx.day_of_span} of {tx.duration_days}
+                    </div>
+                  )}
                   {tx.notes && (
                     <div style={{ fontSize: 12, color: '#7f1d1d', marginTop: 3 }}>{tx.notes}</div>
                   )}
