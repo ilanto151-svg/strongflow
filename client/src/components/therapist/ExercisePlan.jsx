@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../../utils/api';
-import { DAYS, TYPE_META } from '../../constants';
+import { DAYS, TYPE_META, RPE } from '../../constants';
 import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay, today, uid, localDateStr } from '../../utils/calendar';
 import ExerciseCard from './ExerciseCard';
 import ExerciseForm from './ExerciseForm';
@@ -52,6 +52,10 @@ export default function ExercisePlan({ patient }) {
   const [monthReminderDates,  setMonthReminderDates]  = useState({});
   const [monthPausedDates,    setMonthPausedDates]    = useState({});
 
+  // Therapist-defined planned session RPE for the selected day
+  const [plannedRpe, setPlannedRpe] = useState(null);
+  const [plannedRpeSaving, setPlannedRpeSaving] = useState(false);
+
   // ── Exercise load ──────────────────────────────────────────────────────────
   const load = useCallback(() => {
     if (!patient) return;
@@ -73,6 +77,23 @@ export default function ExercisePlan({ patient }) {
     d.setDate(d.getDate() + i);
     return d;
   });
+
+  // ── Planned RPE load (per selected day) ────────────────────────────────────
+  useEffect(() => {
+    if (!patient) return;
+    api.get(`/exercises/${patient.id}/day-plan/${dayKey}`)
+      .then(r => setPlannedRpe(r.data.planned_rpe ?? null))
+      .catch(() => setPlannedRpe(null));
+  }, [patient, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function savePlannedRpe(val) {
+    const rpe = (val === '' || val == null) ? null : Number(val);
+    setPlannedRpe(rpe);
+    setPlannedRpeSaving(true);
+    await api.put(`/exercises/${patient.id}/day-plan/${dayKey}`, { planned_rpe: rpe })
+      .catch(console.error)
+      .finally(() => setPlannedRpeSaving(false));
+  }
 
   // ── Week-view data load ────────────────────────────────────────────────────
   useEffect(() => {
@@ -610,6 +631,46 @@ export default function ExercisePlan({ patient }) {
               })}
               <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
             </>
+          )}
+
+          {/* ── Target Session RPE (therapist-defined) ──────────────────────── */}
+          {!loading && (
+            <div style={{
+              marginTop: 24,
+              padding: '14px 16px',
+              background: '#f0fdf4',
+              border: '1px solid #bbf7d0',
+              borderRadius: 12,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <span style={{ fontSize: 15 }}>🎯</span>
+                <span style={{ fontWeight: 700, fontSize: 13, color: '#166534' }}>Target Session RPE</span>
+                {plannedRpeSaving && (
+                  <span style={{ fontSize: 11, color: '#16a34a', marginLeft: 4 }}>Saving…</span>
+                )}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <select
+                  className="form-input"
+                  style={{ fontSize: 13, width: 'auto', minWidth: 220 }}
+                  value={plannedRpe ?? ''}
+                  onChange={e => savePlannedRpe(e.target.value === '' ? null : e.target.value)}
+                >
+                  <option value="">— No target set</option>
+                  {Object.entries(RPE).map(([k, v]) => (
+                    <option key={k} value={k}>{k} – {v}</option>
+                  ))}
+                </select>
+                {plannedRpe != null && (
+                  <span style={{ fontSize: 12, color: '#166534', fontStyle: 'italic' }}>
+                    {RPE[plannedRpe]}
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: '#15803d', marginTop: 8 }}>
+                Shown to the patient as the planned overall effort for this session.
+              </div>
+            </div>
           )}
         </>
       )}

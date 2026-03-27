@@ -122,6 +122,18 @@ async function initDB() {
     ADD COLUMN IF NOT EXISTS target_hr TEXT DEFAULT '';
   `);
 
+  // day_plans — therapist-authored day-level plan metadata (e.g. planned session RPE)
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS day_plans (
+      patient_id TEXT NOT NULL,
+      day_key INTEGER NOT NULL,
+      planned_rpe INTEGER,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (patient_id, day_key)
+    );
+  `);
+
   // reports
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reports (
@@ -361,6 +373,12 @@ async function initDB() {
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_treatment_reminder_occurrences_rule
     ON treatment_reminder_occurrences(rule_id);
+  `);
+
+  // day_plans
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_day_plans_patient
+    ON day_plans(patient_id);
   `);
 
   console.log('✅ Tables ready');

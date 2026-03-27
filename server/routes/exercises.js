@@ -45,6 +45,22 @@ function parseEx(r) {
   };
 }
 
+// ── Day-plan helper: copy planned_rpe from one (patient, day_key) to another ──
+async function copyDayPlan(srcPid, srcDayKey, dstPid, dstDayKey) {
+  const { rows } = await pool.query(
+    'SELECT planned_rpe FROM day_plans WHERE patient_id = $1 AND day_key = $2',
+    [srcPid, srcDayKey]
+  );
+  if (!rows.length || rows[0].planned_rpe == null) return;
+  await pool.query(
+    `INSERT INTO day_plans (patient_id, day_key, planned_rpe, updated_at)
+     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+     ON CONFLICT (patient_id, day_key)
+     DO UPDATE SET planned_rpe = EXCLUDED.planned_rpe, updated_at = CURRENT_TIMESTAMP`,
+    [dstPid, dstDayKey, rows[0].planned_rpe]
+  );
+}
+
 // Get all exercises for a patient — flat array
 router.get('/:pid', authAny, async (req, res, next) => {
   try {
@@ -59,6 +75,46 @@ router.get('/:pid', authAny, async (req, res, next) => {
     );
 
     res.json(rows.rows.map(parseEx));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get day plan for a specific day (read by therapist or patient)
+router.get('/:pid/day-plan/:day_key', authAny, async (req, res, next) => {
+  try {
+    const allowed = await canAccessAny(req.user, req.params.pid);
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+    const { rows } = await pool.query(
+      'SELECT planned_rpe FROM day_plans WHERE patient_id = $1 AND day_key = $2',
+      [req.params.pid, req.params.day_key]
+    );
+
+    res.json({ planned_rpe: rows[0]?.planned_rpe ?? null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Upsert day plan (therapist only)
+router.put('/:pid/day-plan/:day_key', authTherapist, async (req, res, next) => {
+  try {
+    const allowed = await canAccessTherapist(req.user.id, req.params.pid);
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+    const { planned_rpe } = req.body;
+    const rpe = (planned_rpe != null && planned_rpe !== '') ? Number(planned_rpe) : null;
+
+    await pool.query(
+      `INSERT INTO day_plans (patient_id, day_key, planned_rpe, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (patient_id, day_key)
+       DO UPDATE SET planned_rpe = $3, updated_at = CURRENT_TIMESTAMP`,
+      [req.params.pid, req.params.day_key, rpe]
+    );
+
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
@@ -318,6 +374,9 @@ router.post('/:pid/copy', authTherapist, async (req, res, next) => {
         );
       }
 
+      // Copy day plan for this day
+      await copyDayPlan(req.params.pid, srcKey, req.params.pid, dstKey);
+
       copied++;
     }
 
@@ -469,6 +528,9 @@ router.post('/:pid/copy-day', authTherapist, async (req, res, next) => {
       );
     }
 
+    // Copy day plan (planned_rpe)
+    await copyDayPlan(req.params.pid, src_day_key, req.params.pid, dst_day_key);
+
     res.json({ copied: srcExs.rows.length });
   } catch (err) {
     next(err);
@@ -539,6 +601,9 @@ router.post('/:src_pid/cross-copy-day', authTherapist, async (req, res, next) =>
       await insertExercise(dst_pid, dst_day_key, ex, ord++);
     }
 
+    // Copy day plan (planned_rpe)
+    await copyDayPlan(req.params.src_pid, src_day_key, dst_pid, dst_day_key);
+
     res.json({ copied: rows.length });
   } catch (err) { next(err); }
 });
@@ -566,7 +631,11 @@ router.post('/:src_pid/cross-copy-week', authTherapist, async (req, res, next) =
         [req.params.src_pid, srcKey]
       );
 
-      if (!rows.length) continue;
+      if (!rows.length) {
+        // Still copy day plan even if no exercises
+        await copyDayPlan(req.params.src_pid, srcKey, dst_pid, dstKey);
+        continue;
+      }
 
       if (mode === 'replace') {
         await pool.query('DELETE FROM exercises WHERE patient_id=$1 AND day_key=$2', [dst_pid, dstKey]);
@@ -576,6 +645,10 @@ router.post('/:src_pid/cross-copy-week', authTherapist, async (req, res, next) =
       for (const ex of rows) {
         await insertExercise(dst_pid, dstKey, ex, ord++);
       }
+
+      // Copy day plan (planned_rpe)
+      await copyDayPlan(req.params.src_pid, srcKey, dst_pid, dstKey);
+
       copied++;
     }
 
