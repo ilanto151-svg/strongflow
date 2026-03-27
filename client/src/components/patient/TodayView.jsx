@@ -80,13 +80,47 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
     groups[ex.type].push(ex);
   });
 
-  // Reset per-day state when date changes
+  // Reset per-day UI state when date changes
   useEffect(() => {
     setDismissed(new Set());
     setActualDirty(false);
     setActualSaved(false);
     setWorkoutSaved(false);
   }, [dayDateStr]);
+
+  // Hydrate actualData from server-persisted report on day change.
+  // This ensures sets/reps/weight survive page reloads and work across devices.
+  // Only fills in entries that are absent from localStorage — preserving any
+  // in-progress edits the patient hasn't saved yet.
+  useEffect(() => {
+    const report = reports.find(r => r.day_key === dayKey);
+    if (!report?.session_data || Object.keys(report.session_data).length === 0) return;
+    setActualData(prev => {
+      const next = { ...prev };
+      let changed = false;
+      Object.entries(report.session_data).forEach(([instId, data]) => {
+        const k = `${dayDateStr}_${instId}`;
+        // Server wins only when localStorage has nothing for this entry on this day.
+        // If the patient has already typed something (even unsaved), leave it alone.
+        if (!prev[k]?.sets && !prev[k]?.reps && !prev[k]?.weight) {
+          if (data.sets || data.reps || data.weight) {
+            next[k] = {
+              sets:   data.sets   || '',
+              reps:   data.reps   || '',
+              weight: data.weight || '',
+            };
+            changed = true;
+          }
+        }
+      });
+      if (!changed) return prev; // avoid unnecessary re-render + localStorage write
+      saveActual(next);
+      return next;
+    });
+  }, [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // `reports` and `dayDateStr` are accessed via closure at effect-run time;
+  // omitting them from deps is intentional — we re-hydrate only on day navigation,
+  // not on every reports prop update (which could overwrite in-progress edits).
 
   // Fetch therapist-defined planned RPE for this day
   useEffect(() => {
@@ -196,6 +230,9 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
           nextSession[ex.name] = { sets: ex.sets, reps: ex.reps, weight: ex.weight, date: dayDateStr };
         });
         setSessionPrev(nextSession);
+        // Mark actual data as saved so the "Send" banner clears too
+        setActualDirty(false);
+        setActualSaved(true);
       }
 
       setWorkoutSaved(true);
@@ -646,7 +683,7 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                 color: '#166534',
               }}>
                 <div style={{ fontWeight: 700, marginBottom: 4 }}>✔ Workout report saved</div>
-                <div style={{ fontSize: 13 }}>Session RPE saved for today.</div>
+                <div style={{ fontSize: 13 }}>Session RPE and exercise data saved.</div>
               </div>
             )}
           </div>
