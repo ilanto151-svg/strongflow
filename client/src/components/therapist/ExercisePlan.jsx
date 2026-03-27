@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
 import { DAYS, TYPE_META, RPE } from '../../constants';
 import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay, today, uid, localDateStr } from '../../utils/calendar';
@@ -267,6 +267,48 @@ export default function ExercisePlan({ patient }) {
     if (!typedGroups[ex.type]) typedGroups[ex.type] = [];
     typedGroups[ex.type].push(ex);
   });
+
+  // ── Exercise alert computation ──────────────────────────────────────────────
+  // Scans all exercises for this patient (all days, already loaded) and detects:
+  //   noVariation:   same exercise name+type used across a ≥14-day span
+  //   noProgression: same exercise AND identical parameters across that span
+  //
+  // day_key is weekOffset*7+dow — a linear integer, so max-min = exact day count.
+  // No API calls needed; derived purely from the already-loaded exercises state.
+  const exerciseAlerts = useMemo(() => {
+    function normParam(v) { return (v == null || v === '') ? '' : String(v).trim(); }
+
+    // Group every scheduled occurrence by (type, normalised name)
+    const byKey = {};
+    exercises.forEach(ex => {
+      const k = `${ex.type}:${ex.name.trim().toLowerCase()}`;
+      if (!byKey[k]) byKey[k] = [];
+      byKey[k].push(ex);
+    });
+
+    const result = {}; // alertKey → { noVariation, noProgression }
+    Object.entries(byKey).forEach(([k, exList]) => {
+      if (exList.length < 2) return;
+      const keys = exList.map(e => e.day_key);
+      const span = Math.max(...keys) - Math.min(...keys);
+      if (span < 14) return;
+
+      // Same exercise in plan for ≥14 days → variation alert
+      const noVariation = true;
+
+      // Progression alert only when every occurrence has identical load params
+      const first = exList[0];
+      const noProgression = exList.every(e =>
+        normParam(e.sets)     === normParam(first.sets)     &&
+        normParam(e.reps)     === normParam(first.reps)     &&
+        normParam(e.weight)   === normParam(first.weight)   &&
+        normParam(e.duration) === normParam(first.duration)
+      );
+
+      result[k] = { noVariation, noProgression };
+    });
+    return result;
+  }, [exercises]);
 
   return (
     <div>
@@ -618,14 +660,20 @@ export default function ExercisePlan({ patient }) {
                       <span style={{ fontSize: 18 }}>{meta.icon}</span>
                       <span style={{ fontWeight: 700, color: meta.color }}>{meta.label}</span>
                     </div>
-                    {exs.map(ex => (
-                      <ExerciseCard key={ex.instance_id} ex={ex}
-                        onEdit={updated => editExercise(ex, updated)}
-                        onDelete={() => deleteExercise(ex)}
-                        onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
-                        onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
-                      />
-                    ))}
+                    {exs.map(ex => {
+                      const alertKey = `${ex.type}:${ex.name.trim().toLowerCase()}`;
+                      const alerts   = exerciseAlerts[alertKey] || {};
+                      return (
+                        <ExerciseCard key={ex.instance_id} ex={ex}
+                          noProgression={alerts.noProgression || false}
+                          noVariation={alerts.noVariation || false}
+                          onEdit={updated => editExercise(ex, updated)}
+                          onDelete={() => deleteExercise(ex)}
+                          onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
+                          onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
+                        />
+                      );
+                    })}
                   </div>
                 );
               })}

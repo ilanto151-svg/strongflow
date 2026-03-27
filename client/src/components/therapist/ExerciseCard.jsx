@@ -4,7 +4,7 @@ import Modal from '../shared/Modal';
 import ExerciseForm from './ExerciseForm';
 import { ConfirmModal } from '../shared/Modal';
 
-export default function ExerciseCard({ ex, onEdit, onDelete, onCopy, onCrossPatientCopy }) {
+export default function ExerciseCard({ ex, onEdit, onDelete, onCopy, onCrossPatientCopy, noProgression, noVariation }) {
   const [open, setOpen]       = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -20,9 +20,49 @@ export default function ExerciseCard({ ex, onEdit, onDelete, onCopy, onCrossPati
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-900)' }}>{ex.name}</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 1 }}>
-              <span style={{ background: meta.bg, color: meta.color, borderRadius: 8, padding: '1px 7px', fontWeight: 600 }}>{meta.label}</span>
-              {ex.equipment && <span style={{ marginLeft: 8 }}>{ex.equipment}</span>}
+            <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 1, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ background: meta.bg, color: meta.color, borderRadius: 8, padding: '1px 7px', fontWeight: 600 }}>
+                {meta.label}
+              </span>
+              {ex.equipment && <span>{ex.equipment}</span>}
+
+              {/* Progression alert — amber: params unchanged for 2+ weeks */}
+              {noProgression && (
+                <span
+                  title="Parameters (sets/reps/weight/duration) have not changed in 2+ weeks"
+                  style={{
+                    background: '#fffbeb',
+                    color: '#b45309',
+                    border: '1px solid #fde68a',
+                    borderRadius: 8,
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    cursor: 'default',
+                  }}
+                >
+                  📈 No progression
+                </span>
+              )}
+
+              {/* Variation alert — purple: same exercise used for 2+ weeks */}
+              {noVariation && (
+                <span
+                  title="Same exercise has been in the plan for 2+ weeks — consider introducing a variation"
+                  style={{
+                    background: '#f5f3ff',
+                    color: '#6d28d9',
+                    border: '1px solid #ddd6fe',
+                    borderRadius: 8,
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    cursor: 'default',
+                  }}
+                >
+                  🔄 No variation
+                </span>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
