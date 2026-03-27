@@ -43,7 +43,9 @@ export default function MonthView({
   const monthName = new Date(year, month).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   const selDateStr = selected ? localDateStr(selected) : null;
   const selExs     = selected ? dayExs(selected) : [];
-  const selTx      = selDateStr ? (treatmentDates[selDateStr] || []) : [];
+  const selTxAll   = selDateStr ? (treatmentDates[selDateStr] || []) : [];
+  const selTx      = selTxAll.filter(t => (t.display_mode || 'standard') !== 'hidden');
+  const selTxHidden = selTxAll.filter(t => t.display_mode === 'hidden');
   const selRm      = selDateStr ? (reminderDates[selDateStr]  || []) : [];
   const selPm      = selDateStr ? (pausedDates[selDateStr]    || []) : [];
 
@@ -73,27 +75,32 @@ export default function MonthView({
           const isToday = isSameDay(d, today());
           const isSel   = selected && isSameDay(d, selected);
           const types   = [...new Set(exs.map(e => e.type))];
-          const txList     = treatmentDates[dateStr];
-          const hasTx      = txList && txList.length > 0;
-          const isStartDay = hasTx && txList.some(t => t.day_of_span === 1);
+          const txList        = treatmentDates[dateStr];
+          const visibleTxList = txList ? txList.filter(t => (t.display_mode || 'standard') !== 'hidden') : [];
+          const hiddenTxList  = txList ? txList.filter(t => t.display_mode === 'hidden') : [];
+          const hasTx         = visibleTxList.length > 0;
+          const subtleOnly    = hasTx && visibleTxList.every(t => t.display_mode === 'subtle');
+          const isStartDay    = hasTx && visibleTxList.some(t => t.day_of_span === 1);
           const rmList     = reminderDates[dateStr];
           const hasRm      = rmList && rmList.length > 0;
           const pmList     = pausedDates[dateStr];
           const hasPause   = pmList && pmList.length > 0;
 
-          // Border and background — start days are more vivid than continuation days
+          // Border and background — subtle treatments use softer gray styling
           const borderColor = isSel
             ? 'var(--blue)'
-            : hasTx && isStartDay ? '#fca5a5'
-            : hasTx ? '#fecaca'
+            : hasTx && !subtleOnly && isStartDay ? '#fca5a5'
+            : hasTx && !subtleOnly ? '#fecaca'
+            : hasTx && subtleOnly ? '#e7e5e4'
             : hasRm ? '#fde68a'
             : hasPause ? '#d6d3d1'
             : 'var(--gray-200)';
           const borderWidth = isSel ? 2 : (hasTx || hasRm || hasPause) ? 1.5 : 1;
           const bgColor     = isToday
             ? 'var(--blue-bg)'
-            : hasTx && isStartDay ? '#fff5f5'
-            : hasTx ? '#fff9f9'
+            : hasTx && !subtleOnly && isStartDay ? '#fff5f5'
+            : hasTx && !subtleOnly ? '#fff9f9'
+            : hasTx && subtleOnly ? '#fafaf9'
             : hasRm ? '#fffdf0'
             : hasPause ? '#fafaf9'
             : '#fff';
@@ -126,8 +133,9 @@ export default function MonthView({
               {/* Treatment / reminder / pause badges row */}
               {(hasTx || hasRm || hasPause) && (
                 <div style={{ display: 'flex', gap: 3, alignItems: 'center', justifyContent: 'center', marginTop: 1 }}>
-                  {hasTx && isStartDay  && <span style={{ fontSize: 11, lineHeight: 1 }}>🎗️</span>}
-                  {hasTx && !isStartDay && <span style={{ width: 14, height: 3, background: '#fca5a5', borderRadius: 2, display: 'inline-block' }} />}
+                  {hasTx && !subtleOnly && isStartDay  && <span style={{ fontSize: 11, lineHeight: 1 }}>🎗️</span>}
+                  {hasTx && !subtleOnly && !isStartDay && <span style={{ width: 14, height: 3, background: '#fca5a5', borderRadius: 2, display: 'inline-block' }} />}
+                  {hasTx && subtleOnly  && <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#a8a29e', display: 'inline-block' }} />}
                   {hasRm && <span style={{ fontSize: 10, lineHeight: 1 }}>🔔</span>}
                   {hasPause && !hasTx && <span style={{ fontSize: 10, lineHeight: 1 }}>⏸</span>}
                 </div>
@@ -197,6 +205,30 @@ export default function MonthView({
                   {tx.notes && (
                     <div style={{ fontSize: 12, color: '#7f1d1d', marginTop: 3 }}>{tx.notes}</div>
                   )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Hidden (background) treatments section ── */}
+          {selTxHidden.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                ○ Background Treatments
+              </div>
+              {selTxHidden.map((tx, i) => (
+                <div key={i} style={{
+                  background: '#f8fafc', border: '1px solid #e2e8f0',
+                  borderRadius: 8, padding: '8px 10px',
+                  marginBottom: i < selTxHidden.length - 1 ? 6 : 0,
+                }}>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#64748b' }}>
+                    {tx.name}
+                    {tx.treatment_type && (
+                      <span style={{ fontWeight: 400, color: '#94a3b8', marginLeft: 6 }}>{tx.treatment_type}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Hidden from calendar markers</div>
                 </div>
               ))}
             </div>

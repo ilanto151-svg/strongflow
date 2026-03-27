@@ -456,8 +456,8 @@ router.post('/:pid', authTherapist, async (req, res) => {
     (id, patient_id, name, treatment_type, frequency_value, frequency_unit,
      start_date, last_treatment_date, notes, is_active,
      active_block_count, break_count, break_unit, duration_days,
-     pause_start_date, pause_end_date)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+     pause_start_date, pause_end_date, display_mode)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
   `, [
     id, req.params.pid, b.name,
     b.treatment_type      || '',
@@ -473,6 +473,7 @@ router.post('/:pid', authTherapist, async (req, res) => {
     Math.max(1, Number(b.duration_days) || 1),
     b.pause_start_date    || null,
     b.pause_end_date      || null,
+    ['standard','subtle','hidden'].includes(b.display_mode) ? b.display_mode : 'standard',
   ]);
 
   const { rows } = await pool.query('SELECT * FROM patient_treatments WHERE id=$1', [id]);
@@ -490,8 +491,9 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
       name=$1, treatment_type=$2, frequency_value=$3, frequency_unit=$4,
       start_date=$5, last_treatment_date=$6, notes=$7, is_active=$8,
       active_block_count=$9, break_count=$10, break_unit=$11,
-      duration_days=$12, pause_start_date=$13, pause_end_date=$14
-    WHERE id=$15 AND patient_id=$16
+      duration_days=$12, pause_start_date=$13, pause_end_date=$14,
+      display_mode=$15
+    WHERE id=$16 AND patient_id=$17
   `, [
     b.name,
     b.treatment_type      || '',
@@ -507,6 +509,7 @@ router.put('/:pid/:tid', authTherapist, async (req, res) => {
     Math.max(1, Number(b.duration_days) || 1),
     b.pause_start_date    || null,
     b.pause_end_date      || null,
+    ['standard','subtle','hidden'].includes(b.display_mode) ? b.display_mode : 'standard',
     req.params.tid, req.params.pid,
   ]);
 
@@ -649,6 +652,7 @@ router.get('/:pid/cycles', authTherapist, async (req, res) => {
           notes:          t.notes          || '',
           duration_days:  dur,
           day_of_span:    d + 1,
+          display_mode:   t.display_mode   || 'standard',
         };
         if (isPaused) {
           if (!pausedDates[spanDate]) pausedDates[spanDate] = [];

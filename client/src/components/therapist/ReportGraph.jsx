@@ -216,8 +216,17 @@ function LineChart({ points, color, period, treatmentDates, reminderDates, pause
   });
   if (seg.length >= 2) segments.push(seg);
 
+  // Returns the strongest display_mode among a list of treatment items
+  function markerMode(items) {
+    if (items.some(t => (t.display_mode || 'standard') === 'standard')) return 'standard';
+    if (items.some(t => t.display_mode === 'subtle')) return 'subtle';
+    return 'hidden';
+  }
+
   const spanMs    = Math.max(rangeEnd - rangeStart, 1);
-  const txMarkers = showMarkers ? buildMarkers(treatmentDates, rangeStart, spanMs) : [];
+  const txMarkers = showMarkers
+    ? buildMarkers(treatmentDates, rangeStart, spanMs).filter(m => markerMode(m.items) !== 'hidden')
+    : [];
   const rmMarkers = showMarkers ? buildMarkers(reminderDates,  rangeStart, spanMs) : [];
 
   // Pause bands: gray shaded rectangles behind the chart area
@@ -261,18 +270,25 @@ function LineChart({ points, color, period, treatmentDates, reminderDates, pause
           </g>
         ))}
 
-        {/* ── Treatment markers (red dashed, 🎗️) ─────────────────────── */}
-        {txMarkers.map((m, i) => (
-          <g key={`tx${i}`} style={{ cursor: 'pointer' }}
-            onMouseEnter={e => setMarkerTip({ type: 'treatment', ...m, clientX: e.clientX, clientY: e.clientY })}
-            onMouseLeave={() => setMarkerTip(null)}>
-            {/* Wider transparent hit target */}
-            <rect x={m.x - 8} y={0} width={16} height={SVG_H} fill="transparent" />
-            <line x1={m.x} y1={PAD_T} x2={m.x} y2={PAD_T + PLOT_H}
-              stroke="#fca5a5" strokeWidth={1.5} strokeDasharray="4,3" />
-            <text x={m.x} y={PAD_T - 5} textAnchor="middle" fontSize={12}>🎗️</text>
-          </g>
-        ))}
+        {/* ── Treatment markers (red dashed, 🎗️; subtle = faint) ───────── */}
+        {txMarkers.map((m, i) => {
+          const isSubtle = markerMode(m.items) === 'subtle';
+          return (
+            <g key={`tx${i}`} style={{ cursor: 'pointer' }}
+              onMouseEnter={e => setMarkerTip({ type: 'treatment', ...m, clientX: e.clientX, clientY: e.clientY })}
+              onMouseLeave={() => setMarkerTip(null)}>
+              <rect x={m.x - 8} y={0} width={16} height={SVG_H} fill="transparent" />
+              <line x1={m.x} y1={PAD_T} x2={m.x} y2={PAD_T + PLOT_H}
+                stroke={isSubtle ? 'rgba(252,165,165,0.3)' : '#fca5a5'}
+                strokeWidth={isSubtle ? 1 : 1.5}
+                strokeDasharray={isSubtle ? '2,5' : '4,3'} />
+              {isSubtle
+                ? <circle cx={m.x} cy={PAD_T - 5} r={3} fill="none" stroke="#d6d3d1" strokeWidth={1} />
+                : <text x={m.x} y={PAD_T - 5} textAnchor="middle" fontSize={12}>🎗️</text>
+              }
+            </g>
+          );
+        })}
 
         {/* ── Reminder markers (amber dashed, 🔔, offset +2px) ─────────── */}
         {rmMarkers.map((m, i) => {
@@ -406,7 +422,7 @@ export default function ReportGraph({ patient, reports }) {
   const rangeEndMs   = end.getTime() + 86399999;
   const showMarkers  = period !== 'year';
 
-  const txCount    = Object.keys(txDates).length;
+  const txCount    = Object.values(txDates).filter(items => items.some(t => (t.display_mode || 'standard') !== 'hidden')).length;
   const rmCount    = Object.keys(rmDates).length;
   const pauseCount = pausePeriods.length;
 
@@ -495,14 +511,30 @@ export default function ReportGraph({ patient, reports }) {
       {/* Legend */}
       {showMarkers && (txCount > 0 || rmCount > 0 || pauseCount > 0) && (
         <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginTop: 6, flexWrap: 'wrap' }}>
-          {txCount > 0 && (
-            <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <svg width="18" height="12" style={{ flexShrink: 0 }}>
-                <line x1="0" y1="6" x2="18" y2="6" stroke="#fca5a5" strokeWidth="1.5" strokeDasharray="4,3" />
-              </svg>
-              🎗️ treatment day
-            </span>
-          )}
+          {txCount > 0 && (() => {
+            const hasSubtle   = Object.values(txDates).some(items => items.some(t => t.display_mode === 'subtle') && items.every(t => (t.display_mode || 'standard') !== 'standard'));
+            const hasStandard = Object.values(txDates).some(items => items.some(t => (t.display_mode || 'standard') === 'standard'));
+            return (
+              <>
+                {hasStandard && (
+                  <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <svg width="18" height="12" style={{ flexShrink: 0 }}>
+                      <line x1="0" y1="6" x2="18" y2="6" stroke="#fca5a5" strokeWidth="1.5" strokeDasharray="4,3" />
+                    </svg>
+                    🎗️ treatment day
+                  </span>
+                )}
+                {hasSubtle && (
+                  <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <svg width="18" height="12" style={{ flexShrink: 0 }}>
+                      <line x1="0" y1="6" x2="18" y2="6" stroke="rgba(252,165,165,0.3)" strokeWidth="1" strokeDasharray="2,5" />
+                    </svg>
+                    ◎ subtle treatment
+                  </span>
+                )}
+              </>
+            );
+          })()}
           {rmCount > 0 && (
             <span style={{ fontSize: 11, color: 'var(--gray-400)', display: 'flex', alignItems: 'center', gap: 5 }}>
               <svg width="18" height="12" style={{ flexShrink: 0 }}>

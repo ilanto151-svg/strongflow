@@ -16,6 +16,13 @@ const BLANK_TREATMENT = {
   duration_days: 1,
   pause_start_date: '',
   pause_end_date: '',
+  display_mode: 'standard',
+};
+
+const DISPLAY_MODE_META = {
+  standard: { label: 'Standard',  desc: 'Full marker on each treatment day',        badge: '◉', color: '#166534', bg: '#dcfce7' },
+  subtle:   { label: 'Subtle',    desc: 'Soft minimal indicator, less visual noise', badge: '◎', color: '#78716c', bg: '#f5f5f4' },
+  hidden:   { label: 'Hidden',    desc: 'No daily markers in calendar or reports',   badge: '○', color: '#64748b', bg: '#f1f5f9' },
 };
 
 const BLANK_RULE = {
@@ -191,7 +198,24 @@ function TreatmentForm({ initial, onSave, onCancel }) {
             Active
           </label>
         </div>
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--gray-600)', display: 'block', marginBottom: 3 }}>Calendar visibility</label>
+          <select className="form-input" value={form.display_mode || 'standard'}
+            onChange={e => set('display_mode', e.target.value)}>
+            <option value="standard">Standard — full marker</option>
+            <option value="subtle">Subtle — soft indicator</option>
+            <option value="hidden">Hidden — no daily markers</option>
+          </select>
+        </div>
       </div>
+
+      {/* Smart hint for daily treatments */}
+      {Number(form.frequency_value) === 1 && form.frequency_unit === 'days' && (form.display_mode || 'standard') === 'standard' && (
+        <div style={{ marginBottom: 10, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '7px 12px', fontSize: 12, color: '#92400e', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <span>💡</span>
+          <span>Daily treatments often create visual noise. Consider switching to <strong>Subtle</strong> or <strong>Hidden</strong> visibility.</span>
+        </div>
+      )}
 
       {/* Block + rest pattern */}
       <div style={{ marginBottom: 10, background: hasBreak ? '#eff6ff' : 'transparent', border: hasBreak ? '1px solid #bfdbfe' : '1px solid transparent', borderRadius: 8, padding: hasBreak ? '10px 12px' : '0 12px' }}>
@@ -441,6 +465,11 @@ export default function TreatmentSchedule({ patient }) {
                   ) : (
                     <span style={{ fontSize: 11, background: '#f3f4f6', color: 'var(--gray-500)', borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
                       ○ Inactive
+                    </span>
+                  )}
+                  {t.display_mode && t.display_mode !== 'standard' && (
+                    <span style={{ fontSize: 11, background: DISPLAY_MODE_META[t.display_mode]?.bg, color: DISPLAY_MODE_META[t.display_mode]?.color, borderRadius: 6, padding: '1px 7px', fontWeight: 600 }}>
+                      {DISPLAY_MODE_META[t.display_mode]?.badge} {DISPLAY_MODE_META[t.display_mode]?.label}
                     </span>
                   )}
                 </div>

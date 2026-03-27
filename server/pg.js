@@ -241,6 +241,7 @@ async function initDB() {
       duration_days INTEGER DEFAULT 1,
       pause_start_date TEXT DEFAULT NULL,
       pause_end_date TEXT DEFAULT NULL,
+      display_mode TEXT DEFAULT 'standard',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -273,6 +274,11 @@ async function initDB() {
   await pool.query(`
     ALTER TABLE patient_treatments
     ADD COLUMN IF NOT EXISTS pause_end_date TEXT DEFAULT NULL;
+  `);
+
+  await pool.query(`
+    ALTER TABLE patient_treatments
+    ADD COLUMN IF NOT EXISTS display_mode TEXT DEFAULT 'standard';
   `);
 
   // treatment_reminder_rules

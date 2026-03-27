@@ -379,9 +379,11 @@ export default function ExercisePlan({ patient }) {
               const isToday    = isSameDay(d, today());
               const isSelected = isSameDay(d, selectedDay);
               const hasPlan    = hasExercise(d);
-              const txList     = treatmentDates[dateStr];
-              const hasTx      = txList && txList.length > 0;
-              const isStartDay = hasTx && txList.some(t => t.day_of_span === 1);
+              const txList        = treatmentDates[dateStr];
+              const visibleTxList = txList ? txList.filter(t => (t.display_mode || 'standard') !== 'hidden') : [];
+              const hasTx         = visibleTxList.length > 0;
+              const subtleOnly    = hasTx && visibleTxList.every(t => t.display_mode === 'subtle');
+              const isStartDay    = hasTx && visibleTxList.some(t => t.day_of_span === 1);
               const rmList     = reminderDates[dateStr];
               const hasRm      = rmList && rmList.length > 0;
               const pmList     = pausedDates[dateStr];
@@ -408,16 +410,18 @@ export default function ExercisePlan({ patient }) {
                   {/* Exercise dot */}
                   {hasPlan && <span className="rdot" />}
 
-                  {/* Treatment day badge — 🎗️ for start days, pill for continuation */}
+                  {/* Treatment day badge — 🎗️ for start days, pill for continuation, dot for subtle-only */}
                   {hasTx && (
                     <span
                       style={{ display: 'block', lineHeight: 1, marginTop: 3, textAlign: 'center' }}
                       onMouseEnter={e => { e.stopPropagation(); setTreatmentTooltip({ dateStr, rect: e.currentTarget.getBoundingClientRect() }); setReminderTooltip(null); }}
                       onMouseLeave={() => setTreatmentTooltip(null)}
                     >
-                      {isStartDay
-                        ? <span style={{ fontSize: 11 }}>🎗️</span>
-                        : <span style={{ display: 'inline-block', width: 14, height: 3, background: '#fca5a5', borderRadius: 2, verticalAlign: 'middle' }} />
+                      {subtleOnly
+                        ? <span style={{ display: 'inline-block', width: 4, height: 4, borderRadius: '50%', background: '#a8a29e', verticalAlign: 'middle' }} />
+                        : isStartDay
+                          ? <span style={{ fontSize: 11 }}>🎗️</span>
+                          : <span style={{ display: 'inline-block', width: 14, height: 3, background: '#fca5a5', borderRadius: 2, verticalAlign: 'middle' }} />
                       }
                     </span>
                   )}
@@ -474,22 +478,30 @@ export default function ExercisePlan({ patient }) {
               <div style={{ fontSize: 11, fontWeight: 700, color: '#991b1b', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                 🎗️ Treatment Day
               </div>
-              {treatmentDates[treatmentTooltip.dateStr].map((t, i) => (
-                <div key={i} style={{ marginBottom: i < treatmentDates[treatmentTooltip.dateStr].length - 1 ? 8 : 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{t.name}</div>
-                  {t.treatment_type && (
-                    <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.treatment_type}</div>
-                  )}
-                  {t.duration_days > 1 && (
-                    <div style={{ fontSize: 11, color: '#b91c1c', fontWeight: 600, marginTop: 2 }}>
-                      Day {t.day_of_span} of {t.duration_days}
+              {treatmentDates[treatmentTooltip.dateStr].map((t, i) => {
+                const isHidden = t.display_mode === 'hidden';
+                const isSubtle = t.display_mode === 'subtle';
+                return (
+                  <div key={i} style={{ marginBottom: i < treatmentDates[treatmentTooltip.dateStr].length - 1 ? 8 : 0, opacity: isHidden ? 0.6 : 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: isHidden ? 'var(--gray-500)' : undefined }}>
+                      {t.name}
+                      {isHidden && <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8', marginLeft: 5 }}>(background)</span>}
+                      {isSubtle && <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8', marginLeft: 5 }}>(subtle)</span>}
                     </div>
-                  )}
-                  {t.notes && (
-                    <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📝 {t.notes}</div>
-                  )}
-                </div>
-              ))}
+                    {t.treatment_type && (
+                      <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>{t.treatment_type}</div>
+                    )}
+                    {t.duration_days > 1 && (
+                      <div style={{ fontSize: 11, color: '#b91c1c', fontWeight: 600, marginTop: 2 }}>
+                        Day {t.day_of_span} of {t.duration_days}
+                      </div>
+                    )}
+                    {t.notes && (
+                      <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 2 }}>📝 {t.notes}</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
