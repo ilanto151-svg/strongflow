@@ -24,6 +24,7 @@ function parseReport(r) {
     notes: r.notes,
     session_rpe: r.session_rpe ? JSON.parse(r.session_rpe) : {},
     session_data: r.session_data ? JSON.parse(r.session_data) : {},
+    planned_rpe: r.planned_rpe ?? null,
     submitted_at: r.created_at || null,
   };
 }
@@ -35,6 +36,7 @@ function asyncHandler(fn) {
 }
 
 // GET /reports/:pid
+// LEFT JOIN day_plans so each report includes the therapist's planned_rpe for that day.
 router.get(
   '/:pid',
   authAny,
@@ -44,7 +46,12 @@ router.get(
     }
 
     const { rows } = await pool.query(
-      'SELECT * FROM reports WHERE patient_id = $1 ORDER BY day_key',
+      `SELECT r.*, dp.planned_rpe
+       FROM reports r
+       LEFT JOIN day_plans dp
+         ON dp.patient_id = r.patient_id AND dp.day_key = r.day_key
+       WHERE r.patient_id = $1
+       ORDER BY r.day_key`,
       [req.params.pid]
     );
 
@@ -72,27 +79,25 @@ router.post(
     if (existingResult.rows.length > 0) {
       const existing = existingResult.rows[0];
 
-      const nextFatigue = fatigue !== undefined ? fatigue : existing.fatigue;
-      const nextPain = pain !== undefined ? pain : existing.pain;
-      const nextWellbeing = wellbeing !== undefined ? wellbeing : existing.wellbeing;
-      const nextNotes = notes !== undefined ? notes : existing.notes;
+      const nextFatigue    = fatigue      !== undefined ? fatigue      : existing.fatigue;
+      const nextPain       = pain         !== undefined ? pain         : existing.pain;
+      const nextWellbeing  = wellbeing    !== undefined ? wellbeing    : existing.wellbeing;
+      const nextNotes      = notes        !== undefined ? notes        : existing.notes;
       const nextSessionRpe =
-        session_rpe !== undefined ? JSON.stringify(session_rpe) : existing.session_rpe;
+        session_rpe  !== undefined ? JSON.stringify(session_rpe)  : existing.session_rpe;
       const nextSessionData =
         session_data !== undefined ? JSON.stringify(session_data) : existing.session_data;
 
       await pool.query(
-        `
-        UPDATE reports
-        SET fatigue = $1,
-            pain = $2,
-            wellbeing = $3,
-            notes = $4,
-            session_rpe = $5,
-            session_data = $6,
-            created_at = CURRENT_TIMESTAMP
-        WHERE patient_id = $7 AND day_key = $8
-        `,
+        `UPDATE reports
+         SET fatigue      = $1,
+             pain         = $2,
+             wellbeing    = $3,
+             notes        = $4,
+             session_rpe  = $5,
+             session_data = $6,
+             created_at   = CURRENT_TIMESTAMP
+         WHERE patient_id = $7 AND day_key = $8`,
         [
           nextFatigue,
           nextPain,
@@ -106,11 +111,9 @@ router.post(
       );
     } else {
       await pool.query(
-        `
-        INSERT INTO reports
-        (patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
-        `,
+        `INSERT INTO reports
+         (patient_id, day_key, fatigue, pain, wellbeing, notes, session_rpe, session_data, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)`,
         [
           pid,
           day_key,
@@ -118,7 +121,7 @@ router.post(
           pain ?? null,
           wellbeing ?? null,
           notes ?? '',
-          session_rpe !== undefined ? JSON.stringify(session_rpe) : null,
+          session_rpe  !== undefined ? JSON.stringify(session_rpe)  : null,
           session_data !== undefined ? JSON.stringify(session_data) : null,
         ]
       );

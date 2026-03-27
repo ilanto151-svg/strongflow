@@ -34,6 +34,19 @@ export default function Reports({ patient }) {
     return '#ef4444';
   }
 
+  // Given planned and actual RPE values, return the styling tokens for the comparison UI.
+  function rpeCompare(planned, actual) {
+    if (planned == null || actual == null) return null;
+    const diff = Number(actual) - Number(planned);
+    if (Math.abs(diff) <= 1) {
+      return { diff, badge: '✓',          bg: '#f0fdf4', border: '#86efac', color: '#16a34a', label: 'On target' };
+    }
+    if (diff > 1) {
+      return { diff, badge: `▲ +${diff}`, bg: '#fef2f2', border: '#fca5a5', color: '#dc2626', label: 'Overload'  };
+    }
+    return   { diff, badge: `▼ ${diff}`,  bg: '#eff6ff', border: '#93c5fd', color: '#2563eb', label: 'Underload' };
+  }
+
   // Chart needs ascending order; list view keeps descending (newest first)
   const sortedAsc = [...reports].sort((a, b) => a.day_key - b.day_key);
 
@@ -72,10 +85,13 @@ export default function Reports({ patient }) {
           </div>
         ) : (
           reports.map(r => {
-            const date = keyToDate(r.day_key);
+            const date        = keyToDate(r.day_key);
             const sessionRpe  = r.session_rpe  || {};
             const sessionData = r.session_data || {};
-            const hasExerciseLog = Object.keys(sessionData).length > 0;
+            const hasExerciseLog  = Object.keys(sessionData).length > 0;
+            const hasSessionRpe   = Object.keys(sessionRpe).length > 0;
+            const showRpeSection  = hasSessionRpe || r.planned_rpe != null;
+
             return (
               <div key={r.id} className="metric-card" style={{ marginBottom: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -96,17 +112,78 @@ export default function Reports({ patient }) {
                   ))}
                 </div>
 
-                {/* Session RPE badges */}
-                {Object.keys(sessionRpe).length > 0 && (
-                  <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {Object.entries(sessionRpe).map(([type, rpe]) => {
-                      const cleanType = type.includes('_') ? type.split('_').slice(1).join('_') : type;
-                      return (
-                        <span key={type} style={{ fontSize: 12, background: 'var(--gray-100)', borderRadius: 8, padding: '2px 10px', color: 'var(--gray-600)' }}>
-                          Session RPE ({cleanType}): {rpe}
+                {/* Session RPE — planned vs actual comparison */}
+                {showRpeSection && (
+                  <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--gray-100)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 7 }}>
+                      Session RPE
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+
+                      {/* Planned / target badge */}
+                      {r.planned_rpe != null && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: '#f0fdf4', border: '1px solid #bbf7d0',
+                          borderRadius: 8, padding: '5px 11px',
+                        }}>
+                          <span style={{ fontSize: 10, color: '#166534', fontWeight: 700 }}>🎯 TARGET</span>
+                          <span style={{ fontSize: 18, fontWeight: 800, color: '#16a34a', lineHeight: 1 }}>
+                            {r.planned_rpe}
+                          </span>
+                          <span style={{ fontSize: 10, color: '#166534' }}>{RPE[r.planned_rpe]}</span>
+                        </div>
+                      )}
+
+                      {/* Arrow shown only when both target and actual exist */}
+                      {r.planned_rpe != null && hasSessionRpe && (
+                        <span style={{ fontSize: 14, color: 'var(--gray-300)', userSelect: 'none' }}>→</span>
+                      )}
+
+                      {/* Actual per-type, each with comparison indicator */}
+                      {Object.entries(sessionRpe).map(([type, actual]) => {
+                        const cleanType = type.includes('_')
+                          ? type.split('_').slice(1).join('_')
+                          : type;
+                        const cmp = rpeCompare(r.planned_rpe, actual);
+
+                        const bg        = cmp?.bg        ?? 'var(--gray-100)';
+                        const border    = cmp?.border    ?? 'var(--gray-200)';
+                        const textColor = cmp?.color     ?? 'var(--gray-600)';
+
+                        return (
+                          <div key={type} style={{
+                            display: 'flex', alignItems: 'center', gap: 5,
+                            background: bg, border: `1px solid ${border}`,
+                            borderRadius: 8, padding: '5px 11px',
+                          }}>
+                            <span style={{ fontSize: 10, color: textColor, fontWeight: 700, textTransform: 'capitalize' }}>
+                              {cleanType}
+                            </span>
+                            <span style={{ fontSize: 18, fontWeight: 800, color: textColor, lineHeight: 1 }}>
+                              {actual}
+                            </span>
+                            {cmp && (
+                              <span style={{
+                                fontSize: 10, fontWeight: 700, color: textColor,
+                                background: textColor + '18', borderRadius: 5,
+                                padding: '1px 5px', marginLeft: 1,
+                              }}>
+                                {cmp.badge}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* Edge case: planned exists but patient logged nothing */}
+                      {r.planned_rpe != null && !hasSessionRpe && (
+                        <span style={{ fontSize: 12, color: 'var(--gray-400)', fontStyle: 'italic' }}>
+                          No actual RPE logged
                         </span>
-                      );
-                    })}
+                      )}
+                    </div>
                   </div>
                 )}
 
