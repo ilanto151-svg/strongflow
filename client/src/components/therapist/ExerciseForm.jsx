@@ -15,7 +15,7 @@ const BLANK_RES = {
   body_area: ''
 };
 const BLANK_AER = { type: 'aerobic',    name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '', intervals: [] };
-const BLANK_OTH = { type: 'other',      name: '', image: '', description: '', equipment: '', duration: '', rpe: '', notes: '', img_data: '', img_url: '', link: '' };
+const BLANK_OTH = { type: 'other',      name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '' };
 const BODY_AREAS = [
   'רגליים',
   'חזה',
@@ -98,6 +98,8 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
     const saved = {
       ...form,
       type: tab,
+      // Normalize rpe: empty string should be sent as null so the backend uses its default
+      rpe: (form.rpe !== '' && form.rpe != null) ? form.rpe : null,
       intervals: form.intervals ? JSON.stringify(form.intervals) : '[]',
     };
     onSave(saved);
@@ -327,7 +329,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                 <label className="form-label">Target RPE</label>
                 <select
                   className="form-input"
-                  value={form.rpe || ''}
+                  value={form.rpe ?? ''}
                   onChange={e => set('rpe', e.target.value)}
                 >
                   <option value="">—</option>
