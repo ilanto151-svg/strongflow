@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
 import { DAYS, TYPE_META, RPE } from '../../constants';
 import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay, today, uid, localDateStr } from '../../utils/calendar';
@@ -251,6 +251,95 @@ export default function ExercisePlan({ patient }) {
     }
     setCrossModal(null);
   }
+
+  // ── Exercise alert computation ─────────────────────────────────────────────
+  // MUST stay here — before any early return — so React always calls this hook
+  // in the same order regardless of whether `patient` is set.
+  //
+  // Both alerts are evaluated relative to `dayKey` (the selected day):
+  //
+  //   noProgression: ≥14 days have elapsed since any load/intensity field last
+  //                  changed for this exercise.  Uses first occurrence as the
+  //                  "change day" when parameters have never changed.
+  //
+  //   noVariation:   ≥14 days have elapsed since this exercise name was first
+  //                  used in its current unbroken streak (a gap of >14 days
+  //                  between two occurrences resets the streak).
+  //
+  // Threshold is ≥14 days for both, consistent with the clinical definition of
+  // "two full weeks without a change".
+  const exerciseAlerts = useMemo(() => {
+    if (!exercises.length) return {};
+
+    // Normalise a single param value: null / undefined / '' all become ''.
+    function normParam(v) {
+      return (v == null || v === '') ? '' : String(v).trim();
+    }
+
+    // Canonical signature of every load / intensity field.
+    // Any change in any of these triggers a progression reset.
+    function loadSig(ex) {
+      return [
+        normParam(ex.sets),
+        normParam(ex.reps),
+        normParam(ex.weight),
+        normParam(ex.duration),
+        normParam(ex.rpe),
+        normParam(ex.rest),
+        normParam(ex.intervals), // stored as JSON string; direct comparison is safe
+      ].join('|||');
+    }
+
+    // Group all occurrences by (type + normalised name).
+    const byKey = {};
+    exercises.forEach(ex => {
+      if (!ex || !ex.name) return; // guard against malformed rows
+      const k = `${ex.type || ''}:${ex.name.trim().toLowerCase()}`;
+      if (!byKey[k]) byKey[k] = [];
+      byKey[k].push(ex);
+    });
+
+    const result = {};
+
+    Object.entries(byKey).forEach(([k, exList]) => {
+      // Only consider days up to and including the selected day.
+      const history = exList
+        .filter(e => e.day_key <= dayKey)
+        .sort((a, b) => a.day_key - b.day_key);
+
+      if (history.length === 0) return;
+
+      // ── Progression alert ───────────────────────────────────────────────
+      // Walk the sorted history and track the most recent day a load param
+      // changed.  First occurrence counts as the initial "set" — if nothing
+      // ever changed, lastProgressionChangeDay = first occurrence day.
+      let lastProgressionChangeDay = history[0].day_key;
+      for (let i = 1; i < history.length; i++) {
+        if (loadSig(history[i]) !== loadSig(history[i - 1])) {
+          lastProgressionChangeDay = history[i].day_key;
+        }
+      }
+      const noProgression = (dayKey - lastProgressionChangeDay) >= 14;
+
+      // ── Variation alert ─────────────────────────────────────────────────
+      // Walk backwards through history to find the start of the current
+      // unbroken streak.  A gap of >14 days between two consecutive
+      // occurrences is treated as a streak break (exercise was absent long
+      // enough to be considered "replaced").
+      let streakStart = history[history.length - 1].day_key;
+      for (let i = history.length - 2; i >= 0; i--) {
+        if (history[i + 1].day_key - history[i].day_key > 14) {
+          break; // streak resets; streakStart stays at history[i+1].day_key
+        }
+        streakStart = history[i].day_key;
+      }
+      const noVariation = (dayKey - streakStart) >= 14;
+
+      result[k] = { noVariation, noProgression };
+    });
+
+    return result;
+  }, [exercises, dayKey]); // dayKey in deps: alerts are relative to selected day
 
   // ── No patient selected ───────────────────────────────────────────────────
   if (!patient) {
@@ -618,14 +707,20 @@ export default function ExercisePlan({ patient }) {
                       <span style={{ fontSize: 18 }}>{meta.icon}</span>
                       <span style={{ fontWeight: 700, color: meta.color }}>{meta.label}</span>
                     </div>
-                    {exs.map(ex => (
-                      <ExerciseCard key={ex.instance_id} ex={ex}
-                        onEdit={updated => editExercise(ex, updated)}
-                        onDelete={() => deleteExercise(ex)}
-                        onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
-                        onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
-                      />
-                    ))}
+                    {exs.map(ex => {
+                      const alertKey = `${ex.type || ''}:${(ex.name || '').trim().toLowerCase()}`;
+                      const alerts   = exerciseAlerts[alertKey] || {};
+                      return (
+                        <ExerciseCard key={ex.instance_id} ex={ex}
+                          noProgression={!!alerts.noProgression}
+                          noVariation={!!alerts.noVariation}
+                          onEdit={updated => editExercise(ex, updated)}
+                          onDelete={() => deleteExercise(ex)}
+                          onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
+                          onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
+                        />
+                      );
+                    })}
                   </div>
                 );
               })}
