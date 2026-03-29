@@ -13,8 +13,11 @@ export default function ExerciseCard({
   onDelete,
   onCopy,
   onCrossPatientCopy,
-  noProgression = false,
-  noVariation   = false,
+  noProgression  = false,
+  noVariation    = false,
+  selectMode     = false,
+  selected       = false,
+  onToggleSelect,
 }) {
   const [open,       setOpen]       = useState(false);
   const [editing,    setEditing]    = useState(false);
@@ -27,8 +30,25 @@ export default function ExerciseCard({
 
   return (
     <>
-      <div className="ex-card">
-        <div className="ex-head" onClick={() => setOpen(o => !o)}>
+      <div
+        className="ex-card"
+        style={selected ? { outline: '2px solid #3b82f6', outlineOffset: 1, background: '#eff6ff' } : undefined}
+      >
+        <div
+          className="ex-head"
+          onClick={() => selectMode ? onToggleSelect?.() : setOpen(o => !o)}
+          style={selectMode ? { cursor: 'pointer' } : undefined}
+        >
+
+          {selectMode && (
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={e => { e.stopPropagation(); onToggleSelect?.(); }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: 15, height: 15, flexShrink: 0, cursor: 'pointer', accentColor: '#3b82f6' }}
+            />
+          )}
 
           <div className="ex-icon" style={{ background: meta.bg, color: meta.color }}>
             {ex.image || meta.icon}
@@ -120,7 +140,7 @@ export default function ExerciseCard({
             <button className="icon-btn" onClick={e => { e.stopPropagation(); setConfirming(true); }}>🗑️</button>
           </div>
 
-          <span className={`chevron${open ? ' open' : ''}`}>▼</span>
+          {!selectMode && <span className={`chevron${open ? ' open' : ''}`}>▼</span>}
         </div>
 
         {open && (

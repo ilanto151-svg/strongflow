@@ -240,6 +240,28 @@ router.put('/:pid/:iid', authTherapist, async (req, res, next) => {
   }
 });
 
+// Bulk delete exercises by instance_ids (must be defined before /:pid/:iid)
+router.delete('/:pid/bulk', authTherapist, async (req, res, next) => {
+  try {
+    const allowed = await canAccessTherapist(req.user.id, req.params.pid);
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
+
+    const { instance_ids } = req.body;
+    if (!Array.isArray(instance_ids) || instance_ids.length === 0) {
+      return res.status(400).json({ error: 'instance_ids must be a non-empty array' });
+    }
+
+    await pool.query(
+      'DELETE FROM exercises WHERE patient_id = $1 AND instance_id = ANY($2)',
+      [req.params.pid, instance_ids]
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Delete exercise
 router.delete('/:pid/:iid', authTherapist, async (req, res, next) => {
   try {

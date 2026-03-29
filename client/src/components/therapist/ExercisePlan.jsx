@@ -7,6 +7,7 @@ import ExerciseForm from './ExerciseForm';
 import CopyModal from './CopyModal';
 import CrossPatientCopyModal from './CrossPatientCopyModal';
 import MonthView from '../patient/MonthView';
+import { ConfirmModal } from '../shared/Modal';
 
 // Describes a reminder's timing in plain English.
 // Uses the fields now guaranteed to exist in reminder objects.
@@ -198,6 +199,37 @@ export default function ExercisePlan({ patient }) {
   async function deleteExercise(ex) {
     await api.delete(`/exercises/${patient.id}/${ex.instance_id}`);
     load();
+  }
+
+  // ── Bulk-delete selection ──────────────────────────────────────────────────
+  const [selectMode,        setSelectMode]        = useState(false);
+  const [selectedIds,       setSelectedIds]       = useState(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  // Clear selection whenever the viewed day changes
+  useEffect(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleSelect(instanceId) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(instanceId)) next.delete(instanceId); else next.add(instanceId);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  async function bulkDeleteExercises() {
+    await api.delete(`/exercises/${patient.id}/bulk`, { data: { instance_ids: [...selectedIds] } });
+    load();
+    exitSelectMode();
+    setConfirmBulkDelete(false);
   }
 
   // ── Within-patient copy ────────────────────────────────────────────────────
@@ -699,6 +731,46 @@ export default function ExercisePlan({ patient }) {
             </div>
           ) : (
             <>
+              {/* ── Selection toolbar ────────────────────────────────────── */}
+              {selectMode ? (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  background: '#eff6ff', border: '1px solid #bfdbfe',
+                  borderRadius: 10, padding: '8px 12px', marginBottom: 14,
+                }}>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12, color: '#2563eb' }}
+                    onClick={() => setSelectedIds(new Set(dayExercises.map(e => e.instance_id)))}
+                  >
+                    Select all
+                  </button>
+                  <span style={{ color: 'var(--gray-300)', userSelect: 'none' }}>|</span>
+                  <span style={{ fontSize: 12, color: 'var(--gray-500)', flex: 1 }}>
+                    {selectedIds.size} selected
+                  </span>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ fontSize: 12 }}
+                    onClick={exitSelectMode}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn"
+                    style={{
+                      fontSize: 12, background: selectedIds.size === 0 ? 'var(--gray-200)' : '#ef4444',
+                      color: selectedIds.size === 0 ? 'var(--gray-400)' : '#fff',
+                      border: 'none', borderRadius: 8, padding: '5px 12px', cursor: selectedIds.size === 0 ? 'default' : 'pointer',
+                    }}
+                    disabled={selectedIds.size === 0}
+                    onClick={() => setConfirmBulkDelete(true)}
+                  >
+                    🗑️ Delete selected ({selectedIds.size})
+                  </button>
+                </div>
+              ) : null}
+
               {Object.entries(typedGroups).map(([type, exs]) => {
                 const meta = TYPE_META[type];
                 return (
@@ -714,6 +786,9 @@ export default function ExercisePlan({ patient }) {
                         <ExerciseCard key={ex.instance_id} ex={ex}
                           noProgression={!!alerts.noProgression}
                           noVariation={!!alerts.noVariation}
+                          selectMode={selectMode}
+                          selected={selectedIds.has(ex.instance_id)}
+                          onToggleSelect={() => toggleSelect(ex.instance_id)}
                           onEdit={updated => editExercise(ex, updated)}
                           onDelete={() => deleteExercise(ex)}
                           onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
@@ -724,7 +799,17 @@ export default function ExercisePlan({ patient }) {
                   </div>
                 );
               })}
-              <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                {!selectMode && (
+                  <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
+                )}
+                {!selectMode && (
+                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setSelectMode(true)}>
+                    ☑ Select
+                  </button>
+                )}
+              </div>
             </>
           )}
 
@@ -809,6 +894,15 @@ export default function ExercisePlan({ patient }) {
           instanceId={crossModal.instanceId}
           onCopy={doXCopy}
           onClose={() => setCrossModal(null)}
+        />
+      )}
+
+      {/* Bulk delete confirmation modal */}
+      {confirmBulkDelete && (
+        <ConfirmModal
+          message={`Delete ${selectedIds.size} selected exercise${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`}
+          onConfirm={bulkDeleteExercises}
+          onClose={() => setConfirmBulkDelete(false)}
         />
       )}
     </div>
