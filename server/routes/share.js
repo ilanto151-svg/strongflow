@@ -115,17 +115,22 @@ router.post('/generate/:pid', authTherapist, async (req, res) => {
       };
     });
 
-    // Generate weeks array: week offsets -1 to +2
-    // day_key = weekOffset * 7 + dayOfWeek (base = Sunday of current week at server time)
+    // Generate weeks array: relative offsets -1 to +2 from current week.
+    // day_key = absoluteWeekOffset * 7 + dayOfWeek, where absoluteWeekOffset is
+    // measured from EPOCH_SUNDAY (must match calendar.js on the client side).
+    const EPOCH_SUNDAY = new Date('2026-03-22T00:00:00');
+    EPOCH_SUNDAY.setHours(0, 0, 0, 0);
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
-
-    const wSun = new Date(now);
-    wSun.setDate(wSun.getDate() - wSun.getDay()); // Sunday of current week
+    const todaySun = new Date(now);
+    todaySun.setDate(todaySun.getDate() - todaySun.getDay()); // Sunday of current week
+    const curWeekAbs = Math.round((todaySun - EPOCH_SUNDAY) / (7 * 24 * 60 * 60 * 1000));
 
     const weekData = [];
-    for (let w = -1; w <= 2; w++) {
-      const sun = new Date(wSun);
+    for (let rel = -1; rel <= 2; rel++) {
+      const w   = curWeekAbs + rel; // absolute week offset from epoch
+      const sun = new Date(EPOCH_SUNDAY);
       sun.setDate(sun.getDate() + w * 7);
 
       const days = [];
@@ -133,7 +138,7 @@ router.post('/generate/:pid', authTherapist, async (req, res) => {
         const date = new Date(sun);
         date.setDate(date.getDate() + d);
 
-        const key = w * 7 + d;
+        const key = w * 7 + d; // absolute day_key matching stored values
         const exs = (exByDay[key] || []).map(ex => {
           const e = { ...ex };
           if (e.imgData && e.imgData.length > 40000) delete e.imgData;
@@ -149,7 +154,7 @@ router.post('/generate/:pid', authTherapist, async (req, res) => {
       }
 
       weekData.push({
-        weekOffset: w,
+        weekOffset: rel, // relative to current week for display labels
         sun: sun.toISOString().slice(0, 10),
         days
       });
@@ -176,7 +181,8 @@ router.post('/generate/:pid', authTherapist, async (req, res) => {
     const fileName = safeName + '-oncomove.html';
     const firstName = (p.name || '').split(' ')[0] || 'Patient';
 
-    const requestedWeekOffset = Number(req.body.weekOffset || 0);
+    // weekOffset from the client is an absolute offset from EPOCH_SUNDAY
+    const requestedWeekOffset = Number(req.body.weekOffset || curWeekAbs);
     const weekExs = exercises.filter(
       e => Math.floor(Number(e.day_key) / 7) === requestedWeekOffset
     );

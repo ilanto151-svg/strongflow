@@ -1,7 +1,7 @@
 import { useState, useEffect, Fragment } from 'react';
 import api from '../../utils/api';
 import { DAYS, TYPE_META, RPE } from '../../constants';
-import { dateToKey, keyToDate, sundayOfWeekOffset, weekSunday, today, isSameDay, fmtDate } from '../../utils/calendar';
+import { dateToKey, keyToDate, sundayOfWeekOffset, weekSunday, today, isSameDay, fmtDate, currentWeekOffset } from '../../utils/calendar';
 import Lightbox from '../shared/Lightbox';
 
 const DONE_KEY   = 'om_done_ex';
@@ -34,7 +34,7 @@ function buildPrevByName(reports) {
 
 export default function TodayView({ patient, exercises, reports = [], reload }) {
   const [selectedDate, setSelectedDate] = useState(today());
-  const [weekOffset, setWeekOffset]     = useState(0);
+  const [weekOffset, setWeekOffset]     = useState(() => currentWeekOffset());
   const [done, setDone]                 = useState(loadDone);
   const [sessionRpe, setSessionRpe]     = useState(loadSRpe);
   const [actualData, setActualData]     = useState(loadActual);

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../../utils/api';
 import { DAYS, TYPE_META, RPE } from '../../constants';
-import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay, today, uid, localDateStr } from '../../utils/calendar';
+import { dateToKey, keyToDate, sundayOfWeekOffset, weekLabel, fmtDate, isSameDay, today, uid, localDateStr, currentWeekOffset } from '../../utils/calendar';
 import ExerciseCard from './ExerciseCard';
 import ExerciseForm from './ExerciseForm';
 import CopyModal from './CopyModal';
@@ -22,7 +22,7 @@ function triggerDesc(r) {
 }
 
 export default function ExercisePlan({ patient }) {
-  const [weekOffset, setWeekOffset]   = useState(0);
+  const [weekOffset, setWeekOffset]   = useState(() => currentWeekOffset());
   const [selectedDay, setSelectedDay] = useState(today());
   const [exercises, setExercises]     = useState([]);
   const [showAdd, setShowAdd]         = useState(false);
@@ -435,7 +435,7 @@ export default function ExercisePlan({ patient }) {
               {weekLabel(weekOffset)}
             </span>
             <button className="icon-btn" onClick={() => setWeekOffset(o => o + 1)}>▶</button>
-            {weekOffset !== 0 && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setWeekOffset(0); setSelectedDay(today()); }}>Today</button>}
+            {weekOffset !== currentWeekOffset() && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setWeekOffset(currentWeekOffset()); setSelectedDay(today()); }}>Today</button>}
           </div>
 
           {/* Treatment reminder banners (dismissable) */}

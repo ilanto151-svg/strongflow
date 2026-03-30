@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { DAYS, TYPE_META } from '../../constants';
-import { dateToKey, today, isSameDay, sundayOfWeekOffset, weekLabel, fmtDate } from '../../utils/calendar';
+import { dateToKey, today, isSameDay, sundayOfWeekOffset, weekLabel, fmtDate, currentWeekOffset } from '../../utils/calendar';
 
 export default function WeekView({ exercises }) {
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(() => currentWeekOffset());
   const [expanded, setExpanded]     = useState(null);
 
   const weekStart = sundayOfWeekOffset(weekOffset);
@@ -22,8 +22,8 @@ export default function WeekView({ exercises }) {
         <button className="icon-btn" onClick={() => setWeekOffset(o => o - 1)}>◀</button>
         <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1, textAlign: 'center' }}>{weekLabel(weekOffset)}</h2>
         <button className="icon-btn" onClick={() => setWeekOffset(o => o + 1)}>▶</button>
-        {weekOffset !== 0 && (
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setWeekOffset(0)}>Today</button>
+        {weekOffset !== currentWeekOffset() && (
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setWeekOffset(currentWeekOffset())}>Today</button>
         )}
       </div>
 

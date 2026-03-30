@@ -2,8 +2,7 @@ import { useState } from 'react';
 import Modal from '../shared/Modal';
 import { weekLabel } from '../../utils/calendar';
 
-const DAY_LABELS    = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEK_OFFSETS  = [-2, -1, 0, 1, 2, 3, 4];
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Decompose a day_key (weekOffset * 7 + dow) into its parts.
 function decomposeKey(dayKey) {
@@ -14,6 +13,8 @@ function decomposeKey(dayKey) {
 
 export default function CopyModal({ mode, sourceLabel, srcDayKey, instanceId, currentWeekOffset, onCopy, onClose }) {
   const { week: srcWeek, dow: srcDow } = srcDayKey != null ? decomposeKey(srcDayKey) : { week: currentWeekOffset, dow: 0 };
+  // Offer weeks from 2 before current through 4 ahead — all as absolute offsets from epoch.
+  const WEEK_OFFSETS = [-2, -1, 0, 1, 2, 3, 4].map(r => currentWeekOffset + r);
 
   // Week-copy state
   const [fromWeek, setFromWeek] = useState(currentWeekOffset);
