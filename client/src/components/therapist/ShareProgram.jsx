@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import api from '../../utils/api';
-import { weekLabel } from '../../utils/calendar';
+import { weekLabel, currentWeekOffset } from '../../utils/calendar';
 import Modal from '../shared/Modal';
 
 // Google Drive: upload HTML blob via multipart upload API
@@ -64,7 +64,7 @@ async function uploadToGoogleDrive(htmlContent, fileName) {
 }
 
 export default function ShareProgram({ patient, onClose }) {
-  const [weekOffset,   setWeekOffset]   = useState(0);
+  const [weekOffset,   setWeekOffset]   = useState(() => currentWeekOffset());
   const [loading,      setLoading]      = useState(false);
   const [driveLoading, setDriveLoading] = useState(false);
   const [result,       setResult]       = useState(null);
@@ -132,7 +132,7 @@ export default function ShareProgram({ patient, onClose }) {
               <div className="form-row">
                 <label className="form-label">Starting week</label>
                 <select className="form-input" value={weekOffset} onChange={e => setWeekOffset(+e.target.value)}>
-                  {[-1, 0, 1, 2].map(o => <option key={o} value={o}>{weekLabel(o)}</option>)}
+                  {[-1, 0, 1, 2].map(r => currentWeekOffset() + r).map(o => <option key={o} value={o}>{weekLabel(o)}</option>)}
                 </select>
               </div>
               <p style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 8 }}>
