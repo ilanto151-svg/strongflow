@@ -13,8 +13,8 @@ function decomposeKey(dayKey) {
 
 export default function CopyModal({ mode, sourceLabel, srcDayKey, instanceId, currentWeekOffset, onCopy, onClose }) {
   const { week: srcWeek, dow: srcDow } = srcDayKey != null ? decomposeKey(srcDayKey) : { week: currentWeekOffset, dow: 0 };
-  // Offer weeks from 2 before current through 4 ahead — all as absolute offsets from epoch.
-  const WEEK_OFFSETS = [-2, -1, 0, 1, 2, 3, 4].map(r => currentWeekOffset + r);
+  // Offer weeks from 4 before current through 4 ahead — all as absolute offsets from epoch.
+  const WEEK_OFFSETS = [-4, -3, -2, -1, 0, 1, 2, 3, 4].map(r => currentWeekOffset + r);
 
   // Week-copy state
   const [fromWeek, setFromWeek] = useState(currentWeekOffset);
