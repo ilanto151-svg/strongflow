@@ -174,6 +174,26 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
     setActualDirty(true);
     setActualSaved(false);
   }
+  function addActualSet(instId) {
+    const k = `${dayDateStr}_${instId}`;
+    const prev = actualData[k] || {};
+    const set_data = [...(prev.set_data || []), { reps: '', weight: '' }];
+    const next = { ...actualData, [k]: { ...prev, set_data } };
+    setActualData(next);
+    saveActual(next);
+    setActualDirty(true);
+    setActualSaved(false);
+  }
+  function removeActualSet(instId, idx) {
+    const k = `${dayDateStr}_${instId}`;
+    const prev = actualData[k] || {};
+    const set_data = (prev.set_data || []).filter((_, i) => i !== idx);
+    const next = { ...actualData, [k]: { ...prev, set_data } };
+    setActualData(next);
+    saveActual(next);
+    setActualDirty(true);
+    setActualSaved(false);
+  }
 
   // Build session_data entry for one resistance exercise (handles both uniform and progressive)
   function buildExSessionData(ex) {
@@ -181,7 +201,9 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
       ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
       : [];
     if (setOvr.length > 0) {
-      const set_data = setOvr.map((s, i) => ({
+      const existingSetData = actualData[`${dayDateStr}_${ex.instance_id}`]?.set_data || [];
+      const count = Math.max(setOvr.length, existingSetData.length);
+      const set_data = Array.from({ length: count }, (_, i) => ({
         reps:   getActualSet(ex.instance_id, i, 'reps'),
         weight: getActualSet(ex.instance_id, i, 'weight'),
       }));
@@ -490,46 +512,10 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                   </button>
                                 </td>
 
-                                <td style={{ fontWeight: 700, minWidth: 220 }}>
+                                <td style={{ fontWeight: 700, minWidth: 180 }}>
                                   <div>{ex.name}</div>
                                   {ex.description && (
                                     <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{ex.description}</div>
-                                  )}
-                                  {setOvr.length > 0 && (
-                                    <div style={{ marginTop: 6, overflowX: 'auto' }}>
-                                      <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 320 }}>
-                                        <thead>
-                                          <tr>
-                                            {['Set', 'Plan Reps', 'Actual Reps', 'Plan Weight', 'Actual Weight'].map(h => (
-                                              <th key={h} style={{ padding: '2px 10px 4px 0', textAlign: 'left', fontWeight: 600, color: 'var(--gray-400)', borderBottom: '1px solid var(--gray-200)', whiteSpace: 'nowrap' }}>{h}</th>
-                                            ))}
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {setOvr.map((s, i) => (
-                                            <tr key={i}>
-                                              <td style={{ padding: '4px 10px 4px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{i + 1}</td>
-                                              <td style={{ padding: '4px 10px 4px 0', color: 'var(--gray-400)' }}>{s.reps || '—'}</td>
-                                              <td style={{ padding: '4px 10px 4px 0' }}>
-                                                <input className="actual-input" type="text" inputMode="numeric"
-                                                  value={getActualSet(ex.instance_id, i, 'reps')}
-                                                  onChange={e => setActualSet(ex.instance_id, i, 'reps', e.target.value)}
-                                                  placeholder={s.reps || '—'}
-                                                  style={{ width: 60 }} />
-                                              </td>
-                                              <td style={{ padding: '4px 10px 4px 0', color: 'var(--gray-400)' }}>{s.weight || '—'}</td>
-                                              <td style={{ padding: '4px 0' }}>
-                                                <input className="actual-input" type="text"
-                                                  value={getActualSet(ex.instance_id, i, 'weight')}
-                                                  onChange={e => setActualSet(ex.instance_id, i, 'weight', e.target.value)}
-                                                  placeholder={s.weight || '—'}
-                                                  style={{ width: 80 }} />
-                                              </td>
-                                            </tr>
-                                          ))}
-                                        </tbody>
-                                      </table>
-                                    </div>
                                   )}
                                   {ex.link && (
                                     <div style={{ marginTop: 4 }}>
@@ -578,6 +564,52 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                   </button>
                                 </td>
                               </tr>
+
+                              {setOvr.length > 0 && (() => {
+                                const actualSetData = actualData[`${dayDateStr}_${ex.instance_id}`]?.set_data || [];
+                                const totalSets = Math.max(setOvr.length, actualSetData.length);
+                                return (
+                                  <tr className="resistance-extra">
+                                    <td></td>
+                                    <td colSpan={9} style={{ paddingTop: 8, paddingBottom: 10 }}>
+                                      {Array.from({ length: totalSets }, (_, i) => {
+                                        const planned = setOvr[i];
+                                        const plannedLabel = planned
+                                          ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
+                                          : 'extra set';
+                                        return (
+                                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                                            <span style={{ fontWeight: 700, color: 'var(--gray-700)', minWidth: 44, fontSize: 13 }}>Set {i + 1}</span>
+                                            <span style={{ fontSize: 12, color: 'var(--gray-400)', minWidth: 120 }}>
+                                              Planned: {plannedLabel}
+                                            </span>
+                                            <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>Actual:</span>
+                                            <input className="actual-input" type="text" inputMode="numeric"
+                                              value={getActualSet(ex.instance_id, i, 'reps')}
+                                              onChange={e => setActualSet(ex.instance_id, i, 'reps', e.target.value)}
+                                              placeholder="reps"
+                                              style={{ width: 60 }} />
+                                            <input className="actual-input" type="text"
+                                              value={getActualSet(ex.instance_id, i, 'weight')}
+                                              onChange={e => setActualSet(ex.instance_id, i, 'weight', e.target.value)}
+                                              placeholder="weight"
+                                              style={{ width: 80 }} />
+                                            <button
+                                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+                                              title="Remove set"
+                                              onClick={() => removeActualSet(ex.instance_id, i)}
+                                            >×</button>
+                                          </div>
+                                        );
+                                      })}
+                                      <button
+                                        style={{ fontSize: 12, color: 'var(--blue)', background: 'none', border: '1px dashed var(--gray-300)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', marginTop: 2 }}
+                                        onClick={() => addActualSet(ex.instance_id)}
+                                      >+ Add set</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })()}
 
                               {ex.notes && (
                                 <tr className="resistance-extra">

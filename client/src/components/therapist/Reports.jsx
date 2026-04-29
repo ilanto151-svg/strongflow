@@ -198,45 +198,43 @@ export default function Reports({ patient }) {
                         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-800)', marginBottom: 8 }}>{ex.name}</div>
 
                         {ex.set_data ? (
-                          /* Progressive sets — per-set planned vs actual table */
-                          <div style={{ overflowX: 'auto' }}>
-                            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
-                              <thead>
-                                <tr>
-                                  {['Set', 'Plan Reps', 'Actual Reps', 'Δ Reps', 'Plan Weight', 'Actual Weight', 'Δ Weight'].map(h => (
-                                    <th key={h} style={{ padding: '3px 10px 5px 0', textAlign: 'left', fontWeight: 700, color: 'var(--gray-400)', borderBottom: '1px solid #bae6fd', whiteSpace: 'nowrap', fontSize: 11 }}>{h}</th>
-                                  ))}
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(ex.p_set_overrides || []).map((planned, idx) => {
-                                  const actual = ex.set_data[idx] || {};
-                                  const dReps   = actual.reps   && planned.reps   ? Number(actual.reps)   - Number(planned.reps)   : null;
-                                  const dWeight = actual.weight && planned.weight ? Number(actual.weight) - Number(planned.weight) : null;
-                                  function deltaStyle(d) {
-                                    if (d == null || isNaN(d)) return { color: 'var(--gray-300)' };
-                                    if (d === 0)  return { color: '#16a34a', fontWeight: 700 };
-                                    if (d > 0)    return { color: '#2563eb', fontWeight: 700 };
-                                    return              { color: '#dc2626', fontWeight: 700 };
-                                  }
-                                  function deltaLabel(d) {
-                                    if (d == null || isNaN(d)) return '—';
-                                    return d === 0 ? '✓' : (d > 0 ? `+${d}` : `${d}`);
-                                  }
-                                  return (
-                                    <tr key={idx} style={{ borderBottom: '1px solid #e0f2fe' }}>
-                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{idx + 1}</td>
-                                      <td style={{ padding: '5px 10px 5px 0', color: 'var(--gray-500)' }}>{planned.reps || '—'}</td>
-                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: actual.reps ? '#1d4ed8' : 'var(--gray-300)' }}>{actual.reps || '—'}</td>
-                                      <td style={{ padding: '5px 10px 5px 0', ...deltaStyle(dReps) }}>{deltaLabel(dReps)}</td>
-                                      <td style={{ padding: '5px 10px 5px 0', color: 'var(--gray-500)' }}>{planned.weight || '—'}</td>
-                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: actual.weight ? '#1d4ed8' : 'var(--gray-300)' }}>{actual.weight || '—'}</td>
-                                      <td style={{ padding: '5px 0', ...deltaStyle(dWeight) }}>{deltaLabel(dWeight)}</td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
+                          /* Progressive sets — one row per set, plain text with highlight */
+                          <div>
+                            {ex.set_data.map((actual, idx) => {
+                              const planned = (ex.p_set_overrides || [])[idx];
+                              const underReps   = planned?.reps   && actual.reps   && Number(actual.reps)   < Number(planned.reps);
+                              const underWeight = planned?.weight && actual.weight && Number(actual.weight) < Number(planned.weight);
+                              const under = underReps || underWeight;
+                              const isExtra = !planned;
+                              const plannedStr = planned
+                                ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
+                                : 'extra set';
+                              const actualStr = `${actual.reps || '—'} reps × ${actual.weight || '—'}`;
+                              return (
+                                <div key={idx} style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                                  padding: '5px 10px', borderRadius: 7, marginBottom: 5,
+                                  background: under ? '#fef2f2' : isExtra ? '#f5f3ff' : '#f0f9ff',
+                                  border: `1px solid ${under ? '#fca5a5' : isExtra ? '#ddd6fe' : '#bae6fd'}`,
+                                }}>
+                                  <span style={{ fontWeight: 700, fontSize: 13, minWidth: 44, color: under ? '#dc2626' : 'var(--gray-700)' }}>
+                                    Set {idx + 1}
+                                  </span>
+                                  <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+                                    {isExtra ? 'Extra set' : `Planned: ${plannedStr}`}
+                                  </span>
+                                  <span style={{ color: 'var(--gray-300)' }}>→</span>
+                                  <span style={{ fontWeight: 700, fontSize: 13, color: under ? '#dc2626' : '#1d4ed8' }}>
+                                    {actualStr}
+                                  </span>
+                                  {under && (
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fee2e2', borderRadius: 5, padding: '1px 6px' }}>
+                                      ↓ below target
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           /* Uniform sets — flat stat boxes */
