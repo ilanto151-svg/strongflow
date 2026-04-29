@@ -471,13 +471,24 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                     <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{ex.description}</div>
                                   )}
                                   {setOvr.length > 0 && (
-                                    <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4, lineHeight: 1.6 }}>
-                                      {setOvr.map((s, i) => (
-                                        <span key={i} style={{ display: 'inline-block', marginRight: 6 }}>
-                                          <strong style={{ color: 'var(--gray-600)' }}>{i + 1}:</strong> {s.reps || '—'}r {s.weight ? `× ${s.weight}` : ''}
-                                        </span>
-                                      ))}
-                                    </div>
+                                    <table style={{ marginTop: 6, borderCollapse: 'collapse', fontSize: 12 }}>
+                                      <thead>
+                                        <tr>
+                                          {['Set', 'Reps', 'Weight'].map(h => (
+                                            <th key={h} style={{ padding: '2px 10px 2px 0', textAlign: 'left', fontWeight: 600, color: 'var(--gray-400)', borderBottom: '1px solid var(--gray-200)', whiteSpace: 'nowrap' }}>{h}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {setOvr.map((s, i) => (
+                                          <tr key={i}>
+                                            <td style={{ padding: '3px 10px 3px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{i + 1}</td>
+                                            <td style={{ padding: '3px 10px 3px 0', color: 'var(--gray-700)' }}>{s.reps || '—'}</td>
+                                            <td style={{ padding: '3px 0', color: 'var(--gray-700)' }}>{s.weight || '—'}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   )}
                                   {ex.link && (
                                     <div style={{ marginTop: 4 }}>
