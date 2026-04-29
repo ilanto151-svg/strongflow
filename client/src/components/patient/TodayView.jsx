@@ -102,13 +102,15 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
         const k = `${dayDateStr}_${instId}`;
         // Server wins only when localStorage has nothing for this entry on this day.
         // If the patient has already typed something (even unsaved), leave it alone.
-        if (!prev[k]?.sets && !prev[k]?.reps && !prev[k]?.weight) {
+        if (data.set_data?.length > 0) {
+          // Progressive exercise — hydrate set_data if nothing entered yet
+          if (!prev[k]?.set_data?.some(s => s.reps || s.weight)) {
+            next[k] = { ...prev[k], set_data: data.set_data };
+            changed = true;
+          }
+        } else if (!prev[k]?.sets && !prev[k]?.reps && !prev[k]?.weight) {
           if (data.sets || data.reps || data.weight) {
-            next[k] = {
-              sets:   data.sets   || '',
-              reps:   data.reps   || '',
-              weight: data.weight || '',
-            };
+            next[k] = { sets: data.sets || '', reps: data.reps || '', weight: data.weight || '' };
             changed = true;
           }
         }
@@ -157,25 +159,54 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
     setActualSaved(false);
   }
 
+  // Per-set actual helpers (for progressive sets)
+  function getActualSet(instId, setIdx, field) {
+    return actualData[`${dayDateStr}_${instId}`]?.set_data?.[setIdx]?.[field] ?? '';
+  }
+  function setActualSet(instId, setIdx, field, val) {
+    const k = `${dayDateStr}_${instId}`;
+    const prev = actualData[k] || {};
+    const set_data = [...(prev.set_data || [])];
+    set_data[setIdx] = { ...set_data[setIdx], [field]: val };
+    const next = { ...actualData, [k]: { ...prev, set_data } };
+    setActualData(next);
+    saveActual(next);
+    setActualDirty(true);
+    setActualSaved(false);
+  }
+
+  // Build session_data entry for one resistance exercise (handles both uniform and progressive)
+  function buildExSessionData(ex) {
+    const setOvr = ex.set_overrides
+      ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
+      : [];
+    if (setOvr.length > 0) {
+      const set_data = setOvr.map((s, i) => ({
+        reps:   getActualSet(ex.instance_id, i, 'reps'),
+        weight: getActualSet(ex.instance_id, i, 'weight'),
+      }));
+      if (!set_data.some(s => s.reps || s.weight)) return null;
+      return { name: ex.name, set_data, p_set_overrides: setOvr };
+    }
+    const sets   = getActual(ex.instance_id, 'sets');
+    const reps   = getActual(ex.instance_id, 'reps');
+    const weight = getActual(ex.instance_id, 'weight');
+    if (!sets && !reps && !weight) return null;
+    return { name: ex.name, sets, reps, weight, p_sets: ex.sets || '', p_reps: ex.reps || '', p_weight: ex.weight || '' };
+  }
+
   async function submitActualData() {
     setSavingActual(true);
     try {
       const sessionData = {};
       dayExercises.filter(e => e.type === 'resistance').forEach(ex => {
-        const sets   = getActual(ex.instance_id, 'sets');
-        const reps   = getActual(ex.instance_id, 'reps');
-        const weight = getActual(ex.instance_id, 'weight');
-        if (sets || reps || weight) {
-          sessionData[ex.instance_id] = {
-            name: ex.name, sets, reps, weight,
-            p_sets: ex.sets || '', p_reps: ex.reps || '', p_weight: ex.weight || '',
-          };
-        }
+        const entry = buildExSessionData(ex);
+        if (entry) sessionData[ex.instance_id] = entry;
       });
       await api.post(`/reports/${patient.id}`, { day_key: dayKey, session_data: sessionData });
       const nextSession = { ...sessionPrev };
       Object.values(sessionData).forEach(ex => {
-        nextSession[ex.name] = { sets: ex.sets, reps: ex.reps, weight: ex.weight, date: dayDateStr };
+        if (!ex.set_data) nextSession[ex.name] = { sets: ex.sets, reps: ex.reps, weight: ex.weight, date: dayDateStr };
       });
       setSessionPrev(nextSession);
       setActualDirty(false);
@@ -206,16 +237,8 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
       // Build session_data: per-exercise actual sets/reps/weight for resistance exercises today
       const sessionData = {};
       dayExercises.filter(e => e.type === 'resistance').forEach(ex => {
-        const sets   = getActual(ex.instance_id, 'sets');
-        const reps   = getActual(ex.instance_id, 'reps');
-        const weight = getActual(ex.instance_id, 'weight');
-        if (sets || reps || weight) {
-          sessionData[ex.instance_id] = {
-            name: ex.name,
-            sets, reps, weight,
-            p_sets: ex.sets || '', p_reps: ex.reps || '', p_weight: ex.weight || '',
-          };
-        }
+        const entry = buildExSessionData(ex);
+        if (entry) sessionData[ex.instance_id] = entry;
       });
 
       await api.post(`/reports/${patient.id}`, {
@@ -227,7 +250,7 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
       if (Object.keys(sessionData).length > 0) {
         const nextSession = { ...sessionPrev };
         Object.values(sessionData).forEach(ex => {
-          nextSession[ex.name] = { sets: ex.sets, reps: ex.reps, weight: ex.weight, date: dayDateStr };
+          if (!ex.set_data) nextSession[ex.name] = { sets: ex.sets, reps: ex.reps, weight: ex.weight, date: dayDateStr };
         });
         setSessionPrev(nextSession);
         // Mark actual data as saved so the "Send" banner clears too
@@ -253,8 +276,10 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
   const thisWeekSunTime = weekSunday(new Date(dayDateStr)).getTime();
 
   // Suggest only when: same calendar week as the previous entry, different day, no values entered yet today
+  // Progressive exercises are excluded — they have per-set plans that don't map to simple suggestions
   const suggestions = dayExercises.filter(ex => {
     if (ex.type !== 'resistance') return false;
+    if (ex.set_overrides) return false; // has progressive sets — skip
     const prev = getPrev(ex.name);
     if (!prev) return false;
     // Must be a different day
@@ -471,24 +496,40 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                     <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{ex.description}</div>
                                   )}
                                   {setOvr.length > 0 && (
-                                    <table style={{ marginTop: 6, borderCollapse: 'collapse', fontSize: 12 }}>
-                                      <thead>
-                                        <tr>
-                                          {['Set', 'Reps', 'Weight'].map(h => (
-                                            <th key={h} style={{ padding: '2px 10px 2px 0', textAlign: 'left', fontWeight: 600, color: 'var(--gray-400)', borderBottom: '1px solid var(--gray-200)', whiteSpace: 'nowrap' }}>{h}</th>
-                                          ))}
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {setOvr.map((s, i) => (
-                                          <tr key={i}>
-                                            <td style={{ padding: '3px 10px 3px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{i + 1}</td>
-                                            <td style={{ padding: '3px 10px 3px 0', color: 'var(--gray-700)' }}>{s.reps || '—'}</td>
-                                            <td style={{ padding: '3px 0', color: 'var(--gray-700)' }}>{s.weight || '—'}</td>
+                                    <div style={{ marginTop: 6, overflowX: 'auto' }}>
+                                      <table style={{ borderCollapse: 'collapse', fontSize: 12, minWidth: 320 }}>
+                                        <thead>
+                                          <tr>
+                                            {['Set', 'Plan Reps', 'Actual Reps', 'Plan Weight', 'Actual Weight'].map(h => (
+                                              <th key={h} style={{ padding: '2px 10px 4px 0', textAlign: 'left', fontWeight: 600, color: 'var(--gray-400)', borderBottom: '1px solid var(--gray-200)', whiteSpace: 'nowrap' }}>{h}</th>
+                                            ))}
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
+                                        </thead>
+                                        <tbody>
+                                          {setOvr.map((s, i) => (
+                                            <tr key={i}>
+                                              <td style={{ padding: '4px 10px 4px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{i + 1}</td>
+                                              <td style={{ padding: '4px 10px 4px 0', color: 'var(--gray-400)' }}>{s.reps || '—'}</td>
+                                              <td style={{ padding: '4px 10px 4px 0' }}>
+                                                <input className="actual-input" type="text" inputMode="numeric"
+                                                  value={getActualSet(ex.instance_id, i, 'reps')}
+                                                  onChange={e => setActualSet(ex.instance_id, i, 'reps', e.target.value)}
+                                                  placeholder={s.reps || '—'}
+                                                  style={{ width: 60 }} />
+                                              </td>
+                                              <td style={{ padding: '4px 10px 4px 0', color: 'var(--gray-400)' }}>{s.weight || '—'}</td>
+                                              <td style={{ padding: '4px 0' }}>
+                                                <input className="actual-input" type="text"
+                                                  value={getActualSet(ex.instance_id, i, 'weight')}
+                                                  onChange={e => setActualSet(ex.instance_id, i, 'weight', e.target.value)}
+                                                  placeholder={s.weight || '—'}
+                                                  style={{ width: 80 }} />
+                                              </td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
                                   )}
                                   {ex.link && (
                                     <div style={{ marginTop: 4 }}>
@@ -501,22 +542,31 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
 
                                 <td>{ex.body_area || '-'}</td>
                                 <td>
-                                  <input className="actual-input" type="text" inputMode="numeric"
-                                    value={getActual(ex.instance_id, 'sets')}
-                                    onChange={e => setActual(ex.instance_id, 'sets', e.target.value)}
-                                    placeholder={ex.sets || '—'} />
+                                  {setOvr.length > 0
+                                    ? <span style={{ color: 'var(--gray-400)', fontSize: 13 }}>{ex.sets || '—'}</span>
+                                    : <input className="actual-input" type="text" inputMode="numeric"
+                                        value={getActual(ex.instance_id, 'sets')}
+                                        onChange={e => setActual(ex.instance_id, 'sets', e.target.value)}
+                                        placeholder={ex.sets || '—'} />
+                                  }
                                 </td>
                                 <td>
-                                  <input className="actual-input" type="text" inputMode="numeric"
-                                    value={getActual(ex.instance_id, 'reps')}
-                                    onChange={e => setActual(ex.instance_id, 'reps', e.target.value)}
-                                    placeholder={ex.reps || '—'} />
+                                  {setOvr.length > 0
+                                    ? <span style={{ color: 'var(--gray-400)', fontSize: 12 }}>per set ↑</span>
+                                    : <input className="actual-input" type="text" inputMode="numeric"
+                                        value={getActual(ex.instance_id, 'reps')}
+                                        onChange={e => setActual(ex.instance_id, 'reps', e.target.value)}
+                                        placeholder={ex.reps || '—'} />
+                                  }
                                 </td>
                                 <td>
-                                  <input className="actual-input" type="text"
-                                    value={getActual(ex.instance_id, 'weight')}
-                                    onChange={e => setActual(ex.instance_id, 'weight', e.target.value)}
-                                    placeholder={ex.weight || '—'} />
+                                  {setOvr.length > 0
+                                    ? <span style={{ color: 'var(--gray-400)', fontSize: 12 }}>per set ↑</span>
+                                    : <input className="actual-input" type="text"
+                                        value={getActual(ex.instance_id, 'weight')}
+                                        onChange={e => setActual(ex.instance_id, 'weight', e.target.value)}
+                                        placeholder={ex.weight || '—'} />
+                                  }
                                 </td>
                                 <td>{ex.rest || ex.rest_seconds || '-'}</td>
                                 <td>{ex.equipment || '-'}</td>

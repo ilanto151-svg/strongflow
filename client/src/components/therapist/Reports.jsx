@@ -196,15 +196,60 @@ export default function Reports({ patient }) {
                     {Object.values(sessionData).map((ex, i) => (
                       <div key={i} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
                         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-800)', marginBottom: 8 }}>{ex.name}</div>
-                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                          {[['Sets', ex.p_sets, ex.sets], ['Reps', ex.p_reps, ex.reps], ['Weight', ex.p_weight, ex.weight]].map(([label, prescribed, actual]) => (
-                            <div key={label} style={{ background: '#fff', border: '1px solid #e0f2fe', borderRadius: 8, padding: '6px 12px', minWidth: 72, textAlign: 'center' }}>
-                              <div style={{ fontSize: 10, color: 'var(--gray-400)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
-                              {prescribed && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 2 }}>Rx: {prescribed}</div>}
-                              <div style={{ fontSize: 20, fontWeight: 800, color: actual ? '#1d4ed8' : 'var(--gray-300)' }}>{actual || '—'}</div>
-                            </div>
-                          ))}
-                        </div>
+
+                        {ex.set_data ? (
+                          /* Progressive sets — per-set planned vs actual table */
+                          <div style={{ overflowX: 'auto' }}>
+                            <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+                              <thead>
+                                <tr>
+                                  {['Set', 'Plan Reps', 'Actual Reps', 'Δ Reps', 'Plan Weight', 'Actual Weight', 'Δ Weight'].map(h => (
+                                    <th key={h} style={{ padding: '3px 10px 5px 0', textAlign: 'left', fontWeight: 700, color: 'var(--gray-400)', borderBottom: '1px solid #bae6fd', whiteSpace: 'nowrap', fontSize: 11 }}>{h}</th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(ex.p_set_overrides || []).map((planned, idx) => {
+                                  const actual = ex.set_data[idx] || {};
+                                  const dReps   = actual.reps   && planned.reps   ? Number(actual.reps)   - Number(planned.reps)   : null;
+                                  const dWeight = actual.weight && planned.weight ? Number(actual.weight) - Number(planned.weight) : null;
+                                  function deltaStyle(d) {
+                                    if (d == null || isNaN(d)) return { color: 'var(--gray-300)' };
+                                    if (d === 0)  return { color: '#16a34a', fontWeight: 700 };
+                                    if (d > 0)    return { color: '#2563eb', fontWeight: 700 };
+                                    return              { color: '#dc2626', fontWeight: 700 };
+                                  }
+                                  function deltaLabel(d) {
+                                    if (d == null || isNaN(d)) return '—';
+                                    return d === 0 ? '✓' : (d > 0 ? `+${d}` : `${d}`);
+                                  }
+                                  return (
+                                    <tr key={idx} style={{ borderBottom: '1px solid #e0f2fe' }}>
+                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: 'var(--gray-600)' }}>{idx + 1}</td>
+                                      <td style={{ padding: '5px 10px 5px 0', color: 'var(--gray-500)' }}>{planned.reps || '—'}</td>
+                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: actual.reps ? '#1d4ed8' : 'var(--gray-300)' }}>{actual.reps || '—'}</td>
+                                      <td style={{ padding: '5px 10px 5px 0', ...deltaStyle(dReps) }}>{deltaLabel(dReps)}</td>
+                                      <td style={{ padding: '5px 10px 5px 0', color: 'var(--gray-500)' }}>{planned.weight || '—'}</td>
+                                      <td style={{ padding: '5px 10px 5px 0', fontWeight: 700, color: actual.weight ? '#1d4ed8' : 'var(--gray-300)' }}>{actual.weight || '—'}</td>
+                                      <td style={{ padding: '5px 0', ...deltaStyle(dWeight) }}>{deltaLabel(dWeight)}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          /* Uniform sets — flat stat boxes */
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            {[['Sets', ex.p_sets, ex.sets], ['Reps', ex.p_reps, ex.reps], ['Weight', ex.p_weight, ex.weight]].map(([label, prescribed, actual]) => (
+                              <div key={label} style={{ background: '#fff', border: '1px solid #e0f2fe', borderRadius: 8, padding: '6px 12px', minWidth: 72, textAlign: 'center' }}>
+                                <div style={{ fontSize: 10, color: 'var(--gray-400)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 3 }}>{label}</div>
+                                {prescribed && <div style={{ fontSize: 11, color: 'var(--gray-400)', marginBottom: 2 }}>Rx: {prescribed}</div>}
+                                <div style={{ fontSize: 20, fontWeight: 800, color: actual ? '#1d4ed8' : 'var(--gray-300)' }}>{actual || '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
