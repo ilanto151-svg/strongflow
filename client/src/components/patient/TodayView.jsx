@@ -439,6 +439,9 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                           const done_ = isDone(ex.instance_id);
                           const prev = sortedExs[index - 1];
                           const newBodySection = !prev || prev.body_area !== ex.body_area;
+                          const setOvr = ex.set_overrides
+                            ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
+                            : [];
 
                           return (
                             <Fragment key={ex.instance_id}>
@@ -466,6 +469,15 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                   <div>{ex.name}</div>
                                   {ex.description && (
                                     <div style={{ fontSize: 12, color: 'var(--gray-500)', marginTop: 4 }}>{ex.description}</div>
+                                  )}
+                                  {setOvr.length > 0 && (
+                                    <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 4, lineHeight: 1.6 }}>
+                                      {setOvr.map((s, i) => (
+                                        <span key={i} style={{ display: 'inline-block', marginRight: 6 }}>
+                                          <strong style={{ color: 'var(--gray-600)' }}>{i + 1}:</strong> {s.reps || '—'}r {s.weight ? `× ${s.weight}` : ''}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
                                   {ex.link && (
                                     <div style={{ marginTop: 4 }}>

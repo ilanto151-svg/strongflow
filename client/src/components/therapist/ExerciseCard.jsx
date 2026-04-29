@@ -23,9 +23,12 @@ export default function ExerciseCard({
   const [editing,    setEditing]    = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  const meta      = TYPE_META[ex.type] || TYPE_META.other;
-  const intervals = ex.intervals
+  const meta         = TYPE_META[ex.type] || TYPE_META.other;
+  const intervals    = ex.intervals
     ? (() => { try { return JSON.parse(ex.intervals); } catch { return []; } })()
+    : [];
+  const setOverrides = ex.set_overrides
+    ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
     : [];
 
   return (
@@ -153,8 +156,8 @@ export default function ExerciseCard({
             <div className="ex-grid">
               {ex.type === 'resistance' && <>
                 {ex.sets   && <div className="stat-box"><span className="stat-label">Sets</span><span className="stat-val">{ex.sets}</span></div>}
-                {ex.reps   && <div className="stat-box"><span className="stat-label">Reps</span><span className="stat-val">{ex.reps}</span></div>}
-                {ex.weight && <div className="stat-box"><span className="stat-label">Weight</span><span className="stat-val">{ex.weight}</span></div>}
+                {!setOverrides.length && ex.reps   && <div className="stat-box"><span className="stat-label">Reps</span><span className="stat-val">{ex.reps}</span></div>}
+                {!setOverrides.length && ex.weight && <div className="stat-box"><span className="stat-label">Weight</span><span className="stat-val">{ex.weight}</span></div>}
                 {ex.rest   && <div className="stat-box"><span className="stat-label">Rest</span><span className="stat-val">{ex.rest}</span></div>}
               </>}
               {(ex.type === 'aerobic' || ex.type === 'other') && ex.duration && (
@@ -164,6 +167,25 @@ export default function ExerciseCard({
                 <div className="stat-box"><span className="stat-label">Target RPE</span><span className="stat-val">{ex.rpe} – {RPE[ex.rpe]}</span></div>
               )}
             </div>
+
+            {ex.type === 'resistance' && setOverrides.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <table className="interval-table">
+                  <thead>
+                    <tr><th>Set</th><th>Reps</th><th>Weight</th></tr>
+                  </thead>
+                  <tbody>
+                    {setOverrides.map((s, i) => (
+                      <tr key={i}>
+                        <td style={{ fontWeight: 700 }}>{i + 1}</td>
+                        <td>{s.reps || '—'}</td>
+                        <td>{s.weight || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {ex.type === 'aerobic' && intervals.length > 0 && (
               <div style={{ marginTop: 12 }}>

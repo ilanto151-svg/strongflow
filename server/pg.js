@@ -122,6 +122,11 @@ async function initDB() {
     ADD COLUMN IF NOT EXISTS target_hr TEXT DEFAULT '';
   `);
 
+  await pool.query(`
+    ALTER TABLE exercises
+    ADD COLUMN IF NOT EXISTS set_overrides TEXT;
+  `);
+
   // day_plans — therapist-authored day-level plan metadata (e.g. planned session RPE)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS day_plans (

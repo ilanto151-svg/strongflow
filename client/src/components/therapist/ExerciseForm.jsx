@@ -45,9 +45,19 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   const editing = !!initial;
   const [tab, setTab] = useState(initial?.type || 'resistance');
   const [mode, setMode] = useState('custom');
+
+  // Parse set_overrides from initial if editing
+  const initialOverrides = (() => {
+    if (!initial?.set_overrides) return [];
+    try { return JSON.parse(initial.set_overrides); } catch { return []; }
+  })();
+
   const [form, setForm] = useState(
-    initial ? { ...initial, intervals: initial.intervals ? JSON.parse(initial.intervals) : [] } : blankFor(tab)
+    initial
+      ? { ...initial, intervals: initial.intervals ? JSON.parse(initial.intervals) : [], set_overrides: initialOverrides }
+      : blankFor(tab)
   );
+  const [progressive, setProgressive] = useState(initialOverrides.length > 0);
   const [imgLoading, setImgLoading] = useState(false);
 
   function switchTab(t) {
@@ -59,7 +69,38 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   }
 
   function set(k, v) {
-    setForm(f => ({ ...f, [k]: v }));
+    setForm(f => {
+      const next = { ...f, [k]: v };
+      if (k === 'sets' && progressive) {
+        const n = Math.max(0, parseInt(v) || 0);
+        const arr = [...(f.set_overrides || [])];
+        while (arr.length < n) arr.push({ reps: f.reps || '', weight: f.weight || '' });
+        next.set_overrides = arr.slice(0, n);
+      }
+      return next;
+    });
+  }
+
+  function toggleProgressive(on) {
+    setProgressive(on);
+    setForm(f => {
+      if (on) {
+        const n = Math.max(0, parseInt(f.sets) || 0);
+        return {
+          ...f,
+          set_overrides: Array.from({ length: n }, () => ({ reps: f.reps || '', weight: f.weight || '' })),
+        };
+      }
+      return { ...f, set_overrides: [] };
+    });
+  }
+
+  function setOverrideField(i, field, v) {
+    setForm(f => {
+      const arr = [...(f.set_overrides || [])];
+      arr[i] = { ...arr[i], [field]: v };
+      return { ...f, set_overrides: arr };
+    });
   }
 
   async function handleImg(e) {
@@ -95,12 +136,15 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
 
   function handleSave() {
     if (!form.name?.trim()) return alert('Please enter or select an exercise name.');
+    const overrides = progressive && (form.set_overrides || []).length > 0
+      ? form.set_overrides
+      : [];
     const saved = {
       ...form,
       type: tab,
-      // Normalize rpe: empty string should be sent as null so the backend uses its default
       rpe: (form.rpe !== '' && form.rpe != null) ? form.rpe : null,
       intervals: form.intervals ? JSON.stringify(form.intervals) : '[]',
+      set_overrides: overrides.length > 0 ? JSON.stringify(overrides) : null,
     };
     onSave(saved);
   }
@@ -178,65 +222,133 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             </div>
 
             {tab === 'resistance' && (
-              <div className="ex-grid" style={{ marginBottom: 12 }}>
-                <div className="form-row">
-                  <label className="form-label">Sets</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="1"
-                    value={form.sets || ''}
-                    onChange={e => set('sets', e.target.value)}
-                  />
+              <>
+                <div className="ex-grid" style={{ marginBottom: 8 }}>
+                  <div className="form-row">
+                    <label className="form-label">Sets</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="1"
+                      value={form.sets || ''}
+                      onChange={e => set('sets', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Reps{progressive ? ' (default)' : ''}</label>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="1"
+                      value={form.reps || ''}
+                      onChange={e => set('reps', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Weight{progressive ? ' (default)' : ''}</label>
+                    <input
+                      className="form-input"
+                      value={form.weight || ''}
+                      onChange={e => set('weight', e.target.value)}
+                      placeholder="kg / lb"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">Rest</label>
+                    <input
+                      className="form-input"
+                      value={form.rest || ''}
+                      onChange={e => set('rest', e.target.value)}
+                      placeholder="e.g. 60s"
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <label className="form-label">אזור בגוף</label>
+                    <select
+                      className="form-input"
+                      value={form.body_area || ''}
+                      onChange={e => set('body_area', e.target.value)}
+                    >
+                      <option value="">בחר אזור</option>
+                      {BODY_AREAS.map(area => (
+                        <option key={area} value={area}>{area}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div className="form-row">
-                  <label className="form-label">Reps</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="1"
-                    value={form.reps || ''}
-                    onChange={e => set('reps', e.target.value)}
-                  />
+                {/* Progressive sets toggle */}
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13 }}>
+                    <input
+                      type="checkbox"
+                      checked={progressive}
+                      onChange={e => toggleProgressive(e.target.checked)}
+                      style={{ width: 15, height: 15, accentColor: '#3b82f6' }}
+                    />
+                    <span style={{ fontWeight: 600, color: 'var(--gray-700)' }}>
+                      Progressive sets (different reps / weight per set)
+                    </span>
+                  </label>
                 </div>
 
-                <div className="form-row">
-                  <label className="form-label">Weight</label>
-                  <input
-                    className="form-input"
-                    value={form.weight || ''}
-                    onChange={e => set('weight', e.target.value)}
-                    placeholder="kg / lb"
-                  />
-                </div>
+                {/* Per-set table */}
+                {progressive && (form.set_overrides || []).length > 0 && (
+                  <div style={{ marginBottom: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--gray-500)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      Per-set prescription
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 40, textAlign: 'left', fontSize: 12, color: 'var(--gray-500)', paddingBottom: 6, fontWeight: 600 }}>Set</th>
+                          <th style={{ textAlign: 'left', fontSize: 12, color: 'var(--gray-500)', paddingBottom: 6, fontWeight: 600 }}>Reps</th>
+                          <th style={{ textAlign: 'left', fontSize: 12, color: 'var(--gray-500)', paddingBottom: 6, fontWeight: 600 }}>Weight</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(form.set_overrides || []).map((s, i) => (
+                          <tr key={i}>
+                            <td style={{ paddingBottom: 6, paddingRight: 8, fontSize: 13, fontWeight: 700, color: 'var(--gray-600)' }}>
+                              {i + 1}
+                            </td>
+                            <td style={{ paddingBottom: 6, paddingRight: 8 }}>
+                              <input
+                                className="form-input"
+                                type="number"
+                                min="1"
+                                value={s.reps}
+                                onChange={e => setOverrideField(i, 'reps', e.target.value)}
+                                placeholder={form.reps || '—'}
+                                style={{ width: 80 }}
+                              />
+                            </td>
+                            <td style={{ paddingBottom: 6 }}>
+                              <input
+                                className="form-input"
+                                value={s.weight}
+                                onChange={e => setOverrideField(i, 'weight', e.target.value)}
+                                placeholder={form.weight || 'kg / lb'}
+                                style={{ width: 100 }}
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                <div className="form-row">
-                  <label className="form-label">Rest</label>
-                  <input
-                    className="form-input"
-                    value={form.rest || ''}
-                    onChange={e => set('rest', e.target.value)}
-                    placeholder="e.g. 60s"
-                  />
-                </div>
-
-                <div className="form-row">
-                  <label className="form-label">אזור בגוף</label>
-                  <select
-                    className="form-input"
-                    value={form.body_area || ''}
-                    onChange={e => set('body_area', e.target.value)}
-                  >
-                    <option value="">בחר אזור</option>
-                    {BODY_AREAS.map(area => (
-                      <option key={area} value={area}>
-                        {area}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+                {progressive && parseInt(form.sets) > 0 && (form.set_overrides || []).length === 0 && (
+                  <p style={{ fontSize: 12, color: 'var(--gray-400)', marginBottom: 12 }}>
+                    Enter a Sets value above to configure per-set reps and weight.
+                  </p>
+                )}
+              </>
             )}
 
             {(tab === 'aerobic' || tab === 'other') && (
