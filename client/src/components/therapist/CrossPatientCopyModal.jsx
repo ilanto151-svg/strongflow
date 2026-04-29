@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import api from '../../utils/api';
 import Modal from '../shared/Modal';
-import { weekLabel, keyToDate } from '../../utils/calendar';
+import { weekLabel, keyToDate, currentWeekOffset } from '../../utils/calendar';
 
 const DAY_LABELS   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const WEEK_OFFSETS = [-2, -1, 0, 1, 2, 3, 4];
+const cur = currentWeekOffset();
+const WEEK_OFFSETS = [-4, -3, -2, -1, 0, 1, 2, 3, 4].map(r => cur + r);
 
 function decomposeKey(dayKey) {
   const week = Math.floor(dayKey / 7);
@@ -52,9 +53,9 @@ export default function CrossPatientCopyModal({
   const [dstWeek, setDstWeek] = useState(srcWeek);
   const [dstDow,  setDstDow]  = useState(srcDow);
 
-  // For week: target week offset
+  // For week: target week offset — default to one week ahead of source
   const [toWeek, setToWeek] = useState(
-    srcWeekOffset != null ? srcWeekOffset + 1 : 1
+    srcWeekOffset != null ? srcWeekOffset + 1 : cur + 1
   );
 
   // Fetch therapist's patient list (excluding the source patient)
