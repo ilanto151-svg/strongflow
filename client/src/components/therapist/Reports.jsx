@@ -198,37 +198,69 @@ export default function Reports({ patient }) {
                         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--gray-800)', marginBottom: 8 }}>{ex.name}</div>
 
                         {ex.set_data ? (
-                          /* Progressive sets — one row per set, plain text with highlight */
+                          /* Progressive sets — one row per set: removed / changed / added */
                           <div>
                             {ex.set_data.map((actual, idx) => {
                               const planned = (ex.p_set_overrides || [])[idx];
+
+                              if (actual.removed) {
+                                // Set was removed by patient
+                                const plannedStr = planned
+                                  ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
+                                  : '';
+                                return (
+                                  <div key={idx} style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                                    padding: '5px 10px', borderRadius: 7, marginBottom: 5,
+                                    background: '#fef2f2', border: '1px solid #fca5a5',
+                                  }}>
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#dc2626' }}>Set {idx + 1}:</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#dc2626' }}>REMOVED by patient</span>
+                                    {plannedStr && <span style={{ fontSize: 12, color: '#ef4444' }}>({plannedStr} planned)</span>}
+                                  </div>
+                                );
+                              }
+
+                              if (actual.added) {
+                                // Extra set added by patient
+                                return (
+                                  <div key={idx} style={{
+                                    display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                                    padding: '5px 10px', borderRadius: 7, marginBottom: 5,
+                                    background: '#f0fdf4', border: '1px solid #86efac',
+                                  }}>
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#16a34a' }}>Set {idx + 1}:</span>
+                                    <span style={{ fontWeight: 700, fontSize: 13, color: '#16a34a' }}>ADDED by patient</span>
+                                    <span style={{ fontSize: 13, color: '#15803d' }}>— {actual.reps || '—'} reps × {actual.weight || '—'}</span>
+                                  </div>
+                                );
+                              }
+
+                              // Normal set: planned vs actual
                               const underReps   = planned?.reps   && actual.reps   && Number(actual.reps)   < Number(planned.reps);
                               const underWeight = planned?.weight && actual.weight && Number(actual.weight) < Number(planned.weight);
                               const under = underReps || underWeight;
-                              const isExtra = !planned;
                               const plannedStr = planned
                                 ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
-                                : 'extra set';
+                                : '—';
                               const actualStr = `${actual.reps || '—'} reps × ${actual.weight || '—'}`;
                               return (
                                 <div key={idx} style={{
                                   display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                                   padding: '5px 10px', borderRadius: 7, marginBottom: 5,
-                                  background: under ? '#fef2f2' : isExtra ? '#f5f3ff' : '#f0f9ff',
-                                  border: `1px solid ${under ? '#fca5a5' : isExtra ? '#ddd6fe' : '#bae6fd'}`,
+                                  background: under ? '#fff7ed' : '#f0f9ff',
+                                  border: `1px solid ${under ? '#fdba74' : '#bae6fd'}`,
                                 }}>
-                                  <span style={{ fontWeight: 700, fontSize: 13, minWidth: 44, color: under ? '#dc2626' : 'var(--gray-700)' }}>
-                                    Set {idx + 1}
+                                  <span style={{ fontWeight: 700, fontSize: 13, color: under ? '#c2410c' : 'var(--gray-700)' }}>
+                                    Set {idx + 1}:
                                   </span>
-                                  <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>
-                                    {isExtra ? 'Extra set' : `Planned: ${plannedStr}`}
-                                  </span>
+                                  <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>planned {plannedStr}</span>
                                   <span style={{ color: 'var(--gray-300)' }}>→</span>
-                                  <span style={{ fontWeight: 700, fontSize: 13, color: under ? '#dc2626' : '#1d4ed8' }}>
-                                    {actualStr}
+                                  <span style={{ fontWeight: 700, fontSize: 13, color: under ? '#c2410c' : '#1d4ed8' }}>
+                                    actual {actualStr}
                                   </span>
                                   {under && (
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fee2e2', borderRadius: 5, padding: '1px 6px' }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: '#c2410c', background: '#ffedd5', borderRadius: 5, padding: '1px 6px' }}>
                                       ↓ below target
                                     </span>
                                   )}

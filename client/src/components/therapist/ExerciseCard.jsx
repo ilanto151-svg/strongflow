@@ -13,10 +13,11 @@ export default function ExerciseCard({
   onDelete,
   onCopy,
   onCrossPatientCopy,
-  noProgression  = false,
-  noVariation    = false,
-  selectMode     = false,
-  selected       = false,
+  noProgression   = false,
+  noVariation     = false,
+  patientModified = false,
+  selectMode      = false,
+  selected        = false,
   onToggleSelect,
 }) {
   const [open,       setOpen]       = useState(false);
@@ -121,6 +122,26 @@ export default function ExerciseCard({
                   }}
                 >
                   🔄 No variation
+                </span>
+              )}
+
+              {/* Patient modified badge — orange */}
+              {patientModified && (
+                <span
+                  title="Patient submitted actual sets / reps / weight for this exercise"
+                  style={{
+                    background: '#fff7ed',
+                    color: '#c2410c',
+                    border: '1px solid #fdba74',
+                    borderRadius: 8,
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    cursor: 'default',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ⚠ Patient modified
                 </span>
               )}
             </div>

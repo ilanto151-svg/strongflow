@@ -57,6 +57,13 @@ export default function ExercisePlan({ patient }) {
   const [plannedRpe, setPlannedRpe] = useState(null);
   const [plannedRpeSaving, setPlannedRpeSaving] = useState(false);
 
+  // ── Reports (for patient-modified badge) ──────────────────────────────────
+  const [reports, setReports] = useState([]);
+  useEffect(() => {
+    if (!patient) return;
+    api.get(`/reports/${patient.id}`).then(r => setReports(r.data || [])).catch(() => setReports([]));
+  }, [patient]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Exercise load ──────────────────────────────────────────────────────────
   const load = useCallback(() => {
     if (!patient) return;
@@ -71,6 +78,13 @@ export default function ExercisePlan({ patient }) {
 
   const dayKey      = dateToKey(selectedDay);
   const dayExercises = exercises.filter(e => e.day_key === dayKey);
+
+  // Instance IDs the patient has submitted exercise data for on the selected day
+  const patientModifiedIds = useMemo(() => {
+    const report = reports.find(r => r.day_key === dayKey);
+    if (!report?.session_data) return new Set();
+    return new Set(Object.keys(report.session_data));
+  }, [reports, dayKey]);
 
   const weekStart = sundayOfWeekOffset(weekOffset);
   const weekDays  = Array.from({ length: 7 }, (_, i) => {
@@ -786,6 +800,7 @@ export default function ExercisePlan({ patient }) {
                         <ExerciseCard key={ex.instance_id} ex={ex}
                           noProgression={!!alerts.noProgression}
                           noVariation={!!alerts.noVariation}
+                          patientModified={patientModifiedIds.has(ex.instance_id)}
                           selectMode={selectMode}
                           selected={selectedIds.has(ex.instance_id)}
                           onToggleSelect={() => toggleSelect(ex.instance_id)}

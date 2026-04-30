@@ -103,8 +103,8 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
         // Server wins only when localStorage has nothing for this entry on this day.
         // If the patient has already typed something (even unsaved), leave it alone.
         if (data.set_data?.length > 0) {
-          // Progressive exercise — hydrate set_data if nothing entered yet
-          if (!prev[k]?.set_data?.some(s => s.reps || s.weight)) {
+          // Progressive — hydrate if patient hasn't interacted at all yet
+          if (!prev[k]?.set_data) {
             next[k] = { ...prev[k], set_data: data.set_data };
             changed = true;
           }
@@ -123,6 +123,28 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
   // `reports` and `dayDateStr` are accessed via closure at effect-run time;
   // omitting them from deps is intentional — we re-hydrate only on day navigation,
   // not on every reports prop update (which could overwrite in-progress edits).
+
+  // Pre-fill planned values into set_data for progressive exercises that haven't been touched yet.
+  // This makes planned values appear as editable content (not just placeholder text).
+  useEffect(() => {
+    const progressiveExercises = dayExercises.filter(ex => ex.type === 'resistance' && ex.set_overrides);
+    if (!progressiveExercises.length) return;
+    setActualData(prev => {
+      const next = { ...prev };
+      let changed = false;
+      progressiveExercises.forEach(ex => {
+        const k = `${dayDateStr}_${ex.instance_id}`;
+        if (prev[k]?.set_data) return; // already has data — don't overwrite
+        const setOvr = (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })();
+        if (!setOvr.length) return;
+        next[k] = { ...(prev[k] || {}), set_data: setOvr.map(s => ({ reps: s.reps || '', weight: s.weight || '' })) };
+        changed = true;
+      });
+      if (!changed) return prev;
+      saveActual(next);
+      return next;
+    });
+  }, [dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch therapist-defined planned RPE for this day
   useEffect(() => {
@@ -177,7 +199,7 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
   function addActualSet(instId) {
     const k = `${dayDateStr}_${instId}`;
     const prev = actualData[k] || {};
-    const set_data = [...(prev.set_data || []), { reps: '', weight: '' }];
+    const set_data = [...(prev.set_data || []), { reps: '', weight: '', added: true }];
     const next = { ...actualData, [k]: { ...prev, set_data } };
     setActualData(next);
     saveActual(next);
@@ -202,12 +224,35 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
       : [];
     if (setOvr.length > 0) {
       const existingSetData = actualData[`${dayDateStr}_${ex.instance_id}`]?.set_data || [];
-      const count = Math.max(setOvr.length, existingSetData.length);
-      const set_data = Array.from({ length: count }, (_, i) => ({
-        reps:   getActualSet(ex.instance_id, i, 'reps'),
-        weight: getActualSet(ex.instance_id, i, 'weight'),
-      }));
-      if (!set_data.some(s => s.reps || s.weight)) return null;
+      // Build full set list: planned sets that were kept or modified, plus patient-added extras.
+      // Sets in planned positions that are absent from existingSetData are marked removed.
+      const maxPlanned = setOvr.length;
+      const totalActual = existingSetData.length;
+
+      // Map planned-index → actual slot position after removals
+      // We walk existingSetData (which is re-indexed after removals) and label each slot
+      const set_data = [];
+
+      // First pass: emit entries for all planned positions.
+      // If existingSetData has fewer entries than planned, the missing ones were removed.
+      for (let pi = 0; pi < maxPlanned; pi++) {
+        if (pi < totalActual && !existingSetData[pi]?.added) {
+          set_data.push({
+            reps:   existingSetData[pi]?.reps   ?? '',
+            weight: existingSetData[pi]?.weight ?? '',
+          });
+        } else if (pi >= totalActual) {
+          set_data.push({ removed: true });
+        }
+      }
+
+      // Second pass: append patient-added extra sets
+      existingSetData.filter(s => s.added).forEach(s => {
+        set_data.push({ reps: s.reps || '', weight: s.weight || '', added: true });
+      });
+
+      const hasAnyData = set_data.some(s => s.removed || s.added || s.reps || s.weight);
+      if (!hasAnyData) return null;
       return { name: ex.name, set_data, p_set_overrides: setOvr };
     }
     const sets   = getActual(ex.instance_id, 'sets');
@@ -567,35 +612,30 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
 
                               {setOvr.length > 0 && (() => {
                                 const actualSetData = actualData[`${dayDateStr}_${ex.instance_id}`]?.set_data || [];
-                                const totalSets = Math.max(setOvr.length, actualSetData.length);
+                                // Show all current actual rows (planned sets that weren't removed, plus extras)
                                 return (
                                   <tr className="resistance-extra">
                                     <td></td>
                                     <td colSpan={9} style={{ paddingTop: 8, paddingBottom: 10 }}>
-                                      {Array.from({ length: totalSets }, (_, i) => {
-                                        const planned = setOvr[i];
-                                        const plannedLabel = planned
-                                          ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
-                                          : 'extra set';
+                                      {actualSetData.map((s, i) => {
+                                        const planned = setOvr[i]; // undefined for added sets
                                         return (
-                                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                                             <span style={{ fontWeight: 700, color: 'var(--gray-700)', minWidth: 44, fontSize: 13 }}>Set {i + 1}</span>
-                                            <span style={{ fontSize: 12, color: 'var(--gray-400)', minWidth: 120 }}>
-                                              Planned: {plannedLabel}
-                                            </span>
-                                            <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>Actual:</span>
+                                            <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>reps:</span>
                                             <input className="actual-input" type="text" inputMode="numeric"
-                                              value={getActualSet(ex.instance_id, i, 'reps')}
+                                              value={s.reps ?? ''}
                                               onChange={e => setActualSet(ex.instance_id, i, 'reps', e.target.value)}
-                                              placeholder="reps"
+                                              placeholder={planned?.reps || '—'}
                                               style={{ width: 60 }} />
+                                            <span style={{ fontSize: 12, color: 'var(--gray-400)' }}>weight:</span>
                                             <input className="actual-input" type="text"
-                                              value={getActualSet(ex.instance_id, i, 'weight')}
+                                              value={s.weight ?? ''}
                                               onChange={e => setActualSet(ex.instance_id, i, 'weight', e.target.value)}
-                                              placeholder="weight"
+                                              placeholder={planned?.weight || '—'}
                                               style={{ width: 80 }} />
                                             <button
-                                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+                                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--gray-400)', fontSize: 18, padding: '0 4px', lineHeight: 1 }}
                                               title="Remove set"
                                               onClick={() => removeActualSet(ex.instance_id, i)}
                                             >×</button>
