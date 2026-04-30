@@ -16,6 +16,7 @@ export default function ExerciseCard({
   noProgression   = false,
   noVariation     = false,
   patientModified = false,
+  autoFilled      = false,
   selectMode      = false,
   selected        = false,
   onToggleSelect,
@@ -122,6 +123,26 @@ export default function ExerciseCard({
                   }}
                 >
                   🔄 No variation
+                </span>
+              )}
+
+              {/* Auto-filled badge — teal */}
+              {autoFilled && (
+                <span
+                  title="One or more fields were auto-filled by Global Rules"
+                  style={{
+                    background: '#f0fdfa',
+                    color: '#0f766e',
+                    border: '1px solid #99f6e4',
+                    borderRadius: 8,
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    cursor: 'default',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ⚡ Auto-filled
                 </span>
               )}
 

@@ -8,6 +8,7 @@ import CopyModal from './CopyModal';
 import CrossPatientCopyModal from './CrossPatientCopyModal';
 import MonthView from '../patient/MonthView';
 import { ConfirmModal } from '../shared/Modal';
+import GlobalRulesPanel, { loadAutoFilled, saveAutoFilled, clearAutoFilled, computeAffected } from './GlobalRulesPanel';
 
 // Describes a reminder's timing in plain English.
 // Uses the fields now guaranteed to exist in reminder objects.
@@ -56,6 +57,29 @@ export default function ExercisePlan({ patient }) {
   // Therapist-defined planned session RPE for the selected day
   const [plannedRpe, setPlannedRpe] = useState(null);
   const [plannedRpeSaving, setPlannedRpeSaving] = useState(false);
+
+  // ── Global Rules ──────────────────────────────────────────────────────────
+  const [showGlobalRules, setShowGlobalRules] = useState(false);
+  const [autoFilledIds,   setAutoFilledIds]   = useState(new Set());
+
+  // Load auto-filled IDs whenever the patient changes
+  useEffect(() => {
+    if (!patient) return;
+    setAutoFilledIds(loadAutoFilled(patient.id));
+  }, [patient]);
+
+  async function handleApplyRules(preview) {
+    // preview: [{ex, fields, updates}]
+    await Promise.all(
+      preview.map(({ ex, updates }) =>
+        api.put(`/exercises/${patient.id}/${ex.instance_id}`, { ...ex, ...updates })
+      )
+    );
+    const newIds = new Set([...autoFilledIds, ...preview.map(({ ex }) => ex.instance_id)]);
+    setAutoFilledIds(newIds);
+    saveAutoFilled(patient.id, newIds);
+    load();
+  }
 
   // ── Reports (for patient-modified badge) ──────────────────────────────────
   const [reports, setReports] = useState([]);
@@ -739,9 +763,10 @@ export default function ExercisePlan({ patient }) {
             <div className="empty">
               <div className="empty-icon">📋</div>
               <div>No exercises planned for this day.</div>
-              <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => setShowAdd(true)}>
-                + Add Exercise
-              </button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'center' }}>
+                <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Exercise</button>
+                <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setShowGlobalRules(true)}>⚡ Global Rules</button>
+              </div>
             </div>
           ) : (
             <>
@@ -801,6 +826,7 @@ export default function ExercisePlan({ patient }) {
                           noProgression={!!alerts.noProgression}
                           noVariation={!!alerts.noVariation}
                           patientModified={patientModifiedIds.has(ex.instance_id)}
+                          autoFilled={autoFilledIds.has(ex.instance_id)}
                           selectMode={selectMode}
                           selected={selectedIds.has(ex.instance_id)}
                           onToggleSelect={() => toggleSelect(ex.instance_id)}
@@ -822,6 +848,11 @@ export default function ExercisePlan({ patient }) {
                 {!selectMode && (
                   <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setSelectMode(true)}>
                     ☑ Select
+                  </button>
+                )}
+                {!selectMode && (
+                  <button className="btn btn-ghost" style={{ fontSize: 13 }} onClick={() => setShowGlobalRules(true)}>
+                    ⚡ Global Rules
                   </button>
                 )}
               </div>
@@ -918,6 +949,18 @@ export default function ExercisePlan({ patient }) {
           message={`Delete ${selectedIds.size} selected exercise${selectedIds.size !== 1 ? 's' : ''}? This cannot be undone.`}
           onConfirm={bulkDeleteExercises}
           onClose={() => setConfirmBulkDelete(false)}
+        />
+      )}
+
+      {/* Global Rules panel */}
+      {showGlobalRules && (
+        <GlobalRulesPanel
+          patient={patient}
+          selectedDay={selectedDay}
+          dayKey={dayKey}
+          exercises={exercises}
+          onApply={handleApplyRules}
+          onClose={() => setShowGlobalRules(false)}
         />
       )}
     </div>
