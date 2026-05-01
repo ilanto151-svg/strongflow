@@ -184,7 +184,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               className={`type-tab${tab === k ? ' active' : ''}`}
               onClick={() => switchTab(k)}
             >
-              {m.icon} {m.label}
+              {m.label}
             </button>
           ))}
         </div>
@@ -375,64 +375,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               </>
             )}
 
-            {(tab === 'aerobic' || tab === 'other') && (() => {
-              const showIncline = aerEquip.selected.some(s => INCLINE_EQUIPMENT.has(s));
-              const inclineLabel = aerEquip.selected.includes('Treadmill') && !aerEquip.selected.some(s => s === 'Bike (stationary)' || s === 'Elliptical')
-                ? 'Incline (%)'
-                : aerEquip.selected.some(s => s === 'Bike (stationary)' || s === 'Elliptical') && !aerEquip.selected.includes('Treadmill')
-                  ? 'Resistance level'
-                  : 'Incline / Resistance';
-              return (
-                <div style={{ marginBottom: 12 }}>
-                  <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Equipment</label>
-                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-                    {AEROBIC_EQUIPMENT_OPTIONS.map(opt => {
-                      const active = aerEquip.selected.includes(opt);
-                      return (
-                        <button key={opt} type="button"
-                          onClick={() => toggleAerEquip(opt)}
-                          style={{
-                            padding: '4px 12px', fontSize: 12, borderRadius: 20, cursor: 'pointer', border: '1px solid',
-                            background: active ? '#eff6ff' : '#f9fafb',
-                            borderColor: active ? '#3b82f6' : '#d1d5db',
-                            color: active ? '#1d4ed8' : 'var(--gray-600)',
-                            fontWeight: active ? 700 : 400,
-                          }}
-                        >{opt}</button>
-                      );
-                    })}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-                      <input type="checkbox"
-                        checked={aerEquip.selected.includes('Other')}
-                        onChange={() => toggleAerEquip('Other')}
-                        style={{ accentColor: '#3b82f6' }}
-                      />
-                      Other:
-                    </label>
-                    {aerEquip.selected.includes('Other') && (
-                      <input className="form-input" style={{ flex: 1, minWidth: 120, fontSize: 12 }}
-                        value={aerEquip.other}
-                        onChange={e => setAerEquip(p => ({ ...p, other: e.target.value }))}
-                        placeholder="e.g. Rowing machine"
-                      />
-                    )}
-                  </div>
-                  {showIncline && (
-                    <div className="form-row" style={{ marginTop: 10 }}>
-                      <label className="form-label">{inclineLabel}</label>
-                      <input className="form-input" style={{ maxWidth: 160 }}
-                        value={aerEquip.incline}
-                        onChange={e => setAerEquip(p => ({ ...p, incline: e.target.value }))}
-                        placeholder={aerEquip.selected.includes('Treadmill') ? 'e.g. 5%' : 'e.g. level 3'}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-
             {(tab === 'aerobic' || tab === 'other') && (
               <div className="ex-grid" style={{ marginBottom: 8 }}>
                 <div className="form-row">
@@ -462,15 +404,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                     placeholder="e.g. 8 km/h"
                   />
                 </div>
-                <div className="form-row">
-                  <label className="form-label">Rest</label>
-                  <input
-                    className="form-input"
-                    value={form.rest || ''}
-                    onChange={e => set('rest', e.target.value)}
-                    placeholder="e.g. 2 min"
-                  />
-                </div>
               </div>
             )}
 
@@ -478,15 +411,17 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               <div className="form-row">
                 <label className="form-label">Intervals</label>
                 <div style={{ overflowX: 'auto' }}>
-                  <table className="interval-table" style={{ minWidth: 780 }}>
+                  <table className="interval-table" style={{ minWidth: 860 }}>
                     <thead>
                       <tr>
                         <th style={{ width: 28 }}>#</th>
                         <th style={{ width: 80 }}>Duration</th>
                         <th style={{ width: 90 }}>Speed/Pace</th>
+                        <th style={{ width: 100 }}>Heart Rate</th>
+                        <th style={{ width: 60 }}>RPE</th>
                         <th style={{ width: 100 }}>Intensity</th>
-                        <th style={{ width: 110 }}>Equipment</th>
-                        <th style={{ width: 100 }}>Incline/Resistance</th>
+                        <th style={{ width: 110 }}>Incline/Resistance</th>
+                        <th style={{ width: 120 }}>Equipment</th>
                         <th style={{ width: 120 }}>Description</th>
                         <th style={{ width: 32 }}></th>
                       </tr>
@@ -503,7 +438,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                             <td>
                               <input
                                 type="text"
-                                value={row.duration}
+                                value={row.duration || ''}
                                 onChange={e => setInterval(row.id, 'duration', e.target.value)}
                                 placeholder="e.g. 2 min"
                               />
@@ -517,12 +452,39 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                               />
                             </td>
                             <td>
+                              <input
+                                type="text"
+                                value={row.target_hr || ''}
+                                onChange={e => setInterval(row.id, 'target_hr', e.target.value)}
+                                placeholder="e.g. 120–140"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                value={row.rpe || ''}
+                                onChange={e => setInterval(row.id, 'rpe', e.target.value)}
+                                placeholder="0–10"
+                              />
+                            </td>
+                            <td>
                               <select
-                                value={row.intensity || 'moderate'}
+                                value={row.intensity || ''}
                                 onChange={e => setInterval(row.id, 'intensity', e.target.value)}
                               >
+                                <option value="">—</option>
                                 {INTENSITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.incline || ''}
+                                onChange={e => setInterval(row.id, 'incline', e.target.value)}
+                                placeholder={inclinePlaceholder}
+                              />
                             </td>
                             <td>
                               <select
@@ -534,16 +496,6 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                                   <option key={o} value={o}>{o}</option>
                                 ))}
                               </select>
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                value={row.incline || ''}
-                                onChange={e => setInterval(row.id, 'incline', e.target.value)}
-                                placeholder={inclinePlaceholder}
-                                disabled={!eq || eq === 'Stairs / StepMill'}
-                                style={{ opacity: (!eq || eq === 'Stairs / StepMill') ? 0.35 : 1 }}
-                              />
                             </td>
                             <td>
                               <input

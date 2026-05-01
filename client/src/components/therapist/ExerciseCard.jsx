@@ -282,11 +282,13 @@ export default function ExerciseCard({
             )}
 
             {ex.type === 'aerobic' && intervals.length > 0 && (() => {
-              const hasSpeed    = intervals.some(r => r.speed);
-              const hasEquip    = intervals.some(r => r.equipment);
-              const hasIncline  = intervals.some(r => r.incline);
-              const hasDesc     = intervals.some(r => r.description);
-              const hasTargetHR = intervals.some(r => r.target_hr);
+              const hasSpeed   = intervals.some(r => r.speed);
+              const hasHR      = intervals.some(r => r.target_hr);
+              const hasRpe     = intervals.some(r => r.rpe != null && r.rpe !== '');
+              const hasIntens  = intervals.some(r => r.intensity);
+              const hasIncline = intervals.some(r => r.incline);
+              const hasEquip   = intervals.some(r => r.equipment);
+              const hasDesc    = intervals.some(r => r.description);
               return (
                 <div style={{ marginTop: 12, overflowX: 'auto' }}>
                   <table className="interval-table">
@@ -294,13 +296,13 @@ export default function ExerciseCard({
                       <tr>
                         <th style={{ width: 24 }}>#</th>
                         <th>Duration</th>
-                        {hasSpeed    && <th>Speed</th>}
-                        <th>Intensity</th>
-                        <th>RPE</th>
-                        {hasTargetHR && <th>HR</th>}
-                        {hasEquip    && <th>Equipment</th>}
-                        {hasIncline  && <th>Incline/Res.</th>}
-                        {hasDesc     && <th>Note</th>}
+                        {hasSpeed   && <th>Speed</th>}
+                        {hasHR      && <th>Heart Rate</th>}
+                        {hasRpe     && <th>RPE</th>}
+                        {hasIntens  && <th>Intensity</th>}
+                        {hasIncline && <th>Incline/Res.</th>}
+                        {hasEquip   && <th>Equipment</th>}
+                        {hasDesc    && <th>Note</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -308,13 +310,13 @@ export default function ExerciseCard({
                         <tr key={row.id || i}>
                           <td style={{ fontWeight: 700, color: 'var(--gray-400)', textAlign: 'center' }}>{i + 1}</td>
                           <td>{row.duration || '—'}</td>
-                          {hasSpeed    && <td>{row.speed || '—'}</td>}
-                          <td>{row.intensity || '—'}</td>
-                          <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>
-                          {hasTargetHR && <td>{row.target_hr || '—'}</td>}
-                          {hasEquip    && <td>{row.equipment || '—'}</td>}
-                          {hasIncline  && <td>{row.incline || '—'}</td>}
-                          {hasDesc     && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
+                          {hasSpeed   && <td>{row.speed || '—'}</td>}
+                          {hasHR      && <td>{row.target_hr || '—'}</td>}
+                          {hasRpe     && <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>}
+                          {hasIntens  && <td>{row.intensity || '—'}</td>}
+                          {hasIncline && <td>{row.incline || '—'}</td>}
+                          {hasEquip   && <td>{row.equipment || '—'}</td>}
+                          {hasDesc    && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
                         </tr>
                       ))}
                     </tbody>

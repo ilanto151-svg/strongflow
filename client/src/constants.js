@@ -38,4 +38,4 @@ export const RPE = {
   5:"Hard", 6:"Hard+", 7:"Very hard", 8:"Very hard+", 9:"Very severe", 10:"Maximum"
 };
 
-export const INTENSITY_OPTIONS = ["warm-up","easy","moderate","vigorous","cool-down","recovery","sprint"];
+export const INTENSITY_OPTIONS = ["Warm-up","Easy","Moderate","Vigorous","Cool-down","Recovery","Sprint","Rest"];
