@@ -462,11 +462,12 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                             <td>
                               <input
                                 type="number"
-                                min="0"
+                                min="1"
                                 max="10"
                                 value={row.rpe || ''}
                                 onChange={e => setInterval(row.id, 'rpe', e.target.value)}
-                                placeholder="0–10"
+                                placeholder="1-10"
+                                style={{ width: 54 }}
                               />
                             </td>
                             <td>
