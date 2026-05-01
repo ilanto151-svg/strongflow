@@ -17,6 +17,7 @@ export default function ExerciseCard({
   noVariation     = false,
   patientModified = false,
   autoFilled      = false,
+  overridden      = false,
   selectMode      = false,
   selected        = false,
   onToggleSelect,
@@ -126,8 +127,8 @@ export default function ExerciseCard({
                 </span>
               )}
 
-              {/* Auto-filled badge — teal */}
-              {autoFilled && (
+              {/* Auto-filled badge — teal (hidden once manually overridden) */}
+              {autoFilled && !overridden && (
                 <span
                   title="One or more fields were auto-filled by Global Rules"
                   style={{
@@ -143,6 +144,26 @@ export default function ExerciseCard({
                   }}
                 >
                   ⚡ Auto-filled
+                </span>
+              )}
+
+              {/* Overridden badge — shown when therapist manually edited an auto-filled exercise */}
+              {overridden && (
+                <span
+                  title="Started from Global Rules then manually customised"
+                  style={{
+                    background: '#faf5ff',
+                    color: '#7c3aed',
+                    border: '1px solid #ddd6fe',
+                    borderRadius: 8,
+                    padding: '1px 7px',
+                    fontWeight: 600,
+                    fontSize: 11,
+                    cursor: 'default',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ✏️ Custom
                 </span>
               )}
 
@@ -204,6 +225,12 @@ export default function ExerciseCard({
               </>}
               {(ex.type === 'aerobic' || ex.type === 'other') && ex.duration && (
                 <div className="stat-box"><span className="stat-label">Duration</span><span className="stat-val">{ex.duration}</span></div>
+              )}
+              {(ex.type === 'aerobic' || ex.type === 'other') && ex.distance && (
+                <div className="stat-box"><span className="stat-label">Distance</span><span className="stat-val">{ex.distance}</span></div>
+              )}
+              {(ex.type === 'aerobic' || ex.type === 'other') && ex.speed && (
+                <div className="stat-box"><span className="stat-label">Speed</span><span className="stat-val">{ex.speed}</span></div>
               )}
               {ex.rpe != null && ex.rpe !== '' && (
                 <div className="stat-box"><span className="stat-label">Target RPE</span><span className="stat-val">{ex.rpe} – {RPE[ex.rpe]}</span></div>

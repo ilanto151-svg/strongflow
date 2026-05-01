@@ -42,6 +42,8 @@ function parseEx(r) {
     link: r.link,
     intervals: r.intervals || '[]',
     set_overrides: r.set_overrides || null,
+    distance: r.distance || '',
+    speed: r.speed || '',
     sort_order: r.sort_order,
   };
 }
@@ -142,11 +144,11 @@ router.post('/:pid', authTherapist, async (req, res, next) => {
       `INSERT INTO exercises (
         id, patient_id, day_key, instance_id, type, name, image, description,
         equipment, sets, reps, duration, body_area, weight, rest, notes,
-        rpe, img_data, img_url, link, intervals, set_overrides, sort_order
+        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23
+        $17, $18, $19, $20, $21, $22, $23, $24, $25
       )`,
       [
         id,
@@ -171,7 +173,9 @@ router.post('/:pid', authTherapist, async (req, res, next) => {
         ex.link || null,
         ex.intervals || '[]',
         ex.set_overrides || null,
-        ord
+        ord,
+        ex.distance || '',
+        ex.speed || '',
       ]
     );
 
@@ -213,8 +217,10 @@ router.put('/:pid/:iid', authTherapist, async (req, res, next) => {
          img_url = $14,
          link = $15,
          intervals = $16,
-         set_overrides = $17
-       WHERE instance_id = $18 AND patient_id = $19`,
+         set_overrides = $17,
+         distance = $18,
+         speed = $19
+       WHERE instance_id = $20 AND patient_id = $21`,
       [
         ex.name,
         ex.image || '',
@@ -233,6 +239,8 @@ router.put('/:pid/:iid', authTherapist, async (req, res, next) => {
         ex.link || null,
         ex.intervals || '[]',
         ex.set_overrides || null,
+        ex.distance || '',
+        ex.speed || '',
         req.params.iid,
         req.params.pid
       ]
@@ -289,11 +297,11 @@ async function insertExercise(pid, dayKey, ex, ord) {
     `INSERT INTO exercises (
       id, patient_id, day_key, instance_id, type, name, image, description,
       equipment, sets, reps, duration, body_area, weight, rest, notes,
-      rpe, img_data, img_url, link, intervals, set_overrides, sort_order
+      rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8,
       $9, $10, $11, $12, $13, $14, $15, $16,
-      $17, $18, $19, $20, $21, $22, $23
+      $17, $18, $19, $20, $21, $22, $23, $24, $25
     )`,
     [
       'ex_' + crypto.randomUUID().slice(0, 8),
@@ -319,6 +327,8 @@ async function insertExercise(pid, dayKey, ex, ord) {
       ex.intervals      || '[]',
       ex.set_overrides  || null,
       ord,
+      ex.distance       || '',
+      ex.speed          || '',
     ]
   );
 }
@@ -368,11 +378,11 @@ router.post('/:pid/copy', authTherapist, async (req, res, next) => {
           `INSERT INTO exercises (
             id, patient_id, day_key, instance_id, type, name, image, description,
             equipment, sets, reps, duration, body_area, weight, rest, notes,
-            rpe, img_data, img_url, link, intervals, set_overrides, sort_order
+            rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8,
             $9, $10, $11, $12, $13, $14, $15, $16,
-            $17, $18, $19, $20, $21, $22, $23
+            $17, $18, $19, $20, $21, $22, $23, $24, $25
           )`,
           [
             newId,
@@ -397,7 +407,9 @@ router.post('/:pid/copy', authTherapist, async (req, res, next) => {
             ex.link || null,
             ex.intervals || '[]',
             ex.set_overrides || null,
-            ord++
+            ord++,
+            ex.distance || '',
+            ex.speed || '',
           ]
         );
       }
@@ -451,11 +463,11 @@ router.post('/:pid/copy-exercise', authTherapist, async (req, res, next) => {
       `INSERT INTO exercises (
         id, patient_id, day_key, instance_id, type, name, image, description,
         equipment, sets, reps, duration, body_area, weight, rest, notes,
-        rpe, img_data, img_url, link, intervals, set_overrides, sort_order
+        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23
+        $17, $18, $19, $20, $21, $22, $23, $24, $25
       )`,
       [
         newId,
@@ -480,7 +492,9 @@ router.post('/:pid/copy-exercise', authTherapist, async (req, res, next) => {
         ex.link || null,
         ex.intervals || '[]',
         ex.set_overrides || null,
-        ord
+        ord,
+        ex.distance || '',
+        ex.speed || '',
       ]
     );
 
@@ -524,11 +538,11 @@ router.post('/:pid/copy-day', authTherapist, async (req, res, next) => {
         `INSERT INTO exercises (
           id, patient_id, day_key, instance_id, type, name, image, description,
           equipment, sets, reps, duration, body_area, weight, rest, notes,
-          rpe, img_data, img_url, link, intervals, set_overrides, sort_order
+          rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8,
           $9, $10, $11, $12, $13, $14, $15, $16,
-          $17, $18, $19, $20, $21, $22, $23
+          $17, $18, $19, $20, $21, $22, $23, $24, $25
         )`,
         [
           'ex_' + crypto.randomUUID().slice(0, 8),
@@ -553,7 +567,9 @@ router.post('/:pid/copy-day', authTherapist, async (req, res, next) => {
           ex.link || null,
           ex.intervals || '[]',
           ex.set_overrides || null,
-          ord++
+          ord++,
+          ex.distance || '',
+          ex.speed || '',
         ]
       );
     }

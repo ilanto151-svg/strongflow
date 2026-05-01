@@ -8,7 +8,11 @@ import CopyModal from './CopyModal';
 import CrossPatientCopyModal from './CrossPatientCopyModal';
 import MonthView from '../patient/MonthView';
 import { ConfirmModal } from '../shared/Modal';
-import GlobalRulesPanel, { loadAutoFilled, saveAutoFilled, clearAutoFilled, computeAffected } from './GlobalRulesPanel';
+import GlobalRulesPanel, {
+  loadAutoFilled, saveAutoFilled,
+  loadOverridden, saveOverridden,
+  computeAffectedSplit,
+} from './GlobalRulesPanel';
 
 // Describes a reminder's timing in plain English.
 // Uses the fields now guaranteed to exist in reminder objects.
@@ -61,11 +65,13 @@ export default function ExercisePlan({ patient }) {
   // ── Global Rules ──────────────────────────────────────────────────────────
   const [showGlobalRules, setShowGlobalRules] = useState(false);
   const [autoFilledIds,   setAutoFilledIds]   = useState(new Set());
+  const [overriddenIds,   setOverriddenIds]   = useState(new Set());
 
-  // Load auto-filled IDs whenever the patient changes
+  // Load auto-filled / overridden IDs whenever the patient changes
   useEffect(() => {
     if (!patient) return;
     setAutoFilledIds(loadAutoFilled(patient.id));
+    setOverriddenIds(loadOverridden(patient.id));
   }, [patient]);
 
   async function handleApplyRules(preview) {
@@ -79,6 +85,14 @@ export default function ExercisePlan({ patient }) {
     setAutoFilledIds(newIds);
     saveAutoFilled(patient.id, newIds);
     load();
+  }
+
+  function markOverridden(instanceId) {
+    if (!autoFilledIds.has(instanceId)) return; // only track if it was auto-filled
+    if (overriddenIds.has(instanceId)) return;
+    const next = new Set([...overriddenIds, instanceId]);
+    setOverriddenIds(next);
+    saveOverridden(patient.id, next);
   }
 
   // ── Reports (for patient-modified badge) ──────────────────────────────────
@@ -231,6 +245,7 @@ export default function ExercisePlan({ patient }) {
 
   async function editExercise(ex, updated) {
     await api.put(`/exercises/${patient.id}/${ex.instance_id}`, updated);
+    markOverridden(ex.instance_id);
     load();
   }
 
@@ -827,6 +842,7 @@ export default function ExercisePlan({ patient }) {
                           noVariation={!!alerts.noVariation}
                           patientModified={patientModifiedIds.has(ex.instance_id)}
                           autoFilled={autoFilledIds.has(ex.instance_id)}
+                          overridden={overriddenIds.has(ex.instance_id)}
                           selectMode={selectMode}
                           selected={selectedIds.has(ex.instance_id)}
                           onToggleSelect={() => toggleSelect(ex.instance_id)}
@@ -958,6 +974,7 @@ export default function ExercisePlan({ patient }) {
           patient={patient}
           selectedDay={selectedDay}
           dayKey={dayKey}
+          weekOffset={weekOffset}
           exercises={exercises}
           onApply={handleApplyRules}
           onClose={() => setShowGlobalRules(false)}

@@ -352,14 +352,43 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             )}
 
             {(tab === 'aerobic' || tab === 'other') && (
-              <div className="form-row">
-                <label className="form-label">Duration</label>
-                <input
-                  className="form-input"
-                  value={form.duration || ''}
-                  onChange={e => set('duration', e.target.value)}
-                  placeholder="e.g. 20 min"
-                />
+              <div className="ex-grid" style={{ marginBottom: 8 }}>
+                <div className="form-row">
+                  <label className="form-label">Duration</label>
+                  <input
+                    className="form-input"
+                    value={form.duration || ''}
+                    onChange={e => set('duration', e.target.value)}
+                    placeholder="e.g. 20 min"
+                  />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Distance</label>
+                  <input
+                    className="form-input"
+                    value={form.distance || ''}
+                    onChange={e => set('distance', e.target.value)}
+                    placeholder="e.g. 5 km"
+                  />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Speed / Intensity</label>
+                  <input
+                    className="form-input"
+                    value={form.speed || ''}
+                    onChange={e => set('speed', e.target.value)}
+                    placeholder="e.g. 8 km/h"
+                  />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Rest</label>
+                  <input
+                    className="form-input"
+                    value={form.rest || ''}
+                    onChange={e => set('rest', e.target.value)}
+                    placeholder="e.g. 2 min"
+                  />
+                </div>
               </div>
             )}
 
