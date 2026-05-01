@@ -281,34 +281,47 @@ export default function ExerciseCard({
               </div>
             )}
 
-            {ex.type === 'aerobic' && intervals.length > 0 && (
-              <div style={{ marginTop: 12 }}>
-                <table className="interval-table">
-                  <thead>
-                    <tr>
-                      <th>Intensity</th>
-                      <th>Duration</th>
-                      <th>RPE</th>
-                      <th>HR Zone</th>
-                      {intervals.some(r => r.speed) && <th>Speed</th>}
-                      {intervals.some(r => r.description) && <th>Note</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {intervals.map((row, i) => (
-                      <tr key={row.id || i}>
-                        <td>{row.intensity || '—'}</td>
-                        <td>{row.duration || '—'}</td>
-                        <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>
-                        <td>{row.target_hr || '—'}</td>
-                        {intervals.some(r => r.speed) && <td>{row.speed || '—'}</td>}
-                        {intervals.some(r => r.description) && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
+            {ex.type === 'aerobic' && intervals.length > 0 && (() => {
+              const hasSpeed    = intervals.some(r => r.speed);
+              const hasEquip    = intervals.some(r => r.equipment);
+              const hasIncline  = intervals.some(r => r.incline);
+              const hasDesc     = intervals.some(r => r.description);
+              const hasTargetHR = intervals.some(r => r.target_hr);
+              return (
+                <div style={{ marginTop: 12, overflowX: 'auto' }}>
+                  <table className="interval-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 24 }}>#</th>
+                        <th>Duration</th>
+                        {hasSpeed    && <th>Speed</th>}
+                        <th>Intensity</th>
+                        <th>RPE</th>
+                        {hasTargetHR && <th>HR</th>}
+                        {hasEquip    && <th>Equipment</th>}
+                        {hasIncline  && <th>Incline/Res.</th>}
+                        {hasDesc     && <th>Note</th>}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody>
+                      {intervals.map((row, i) => (
+                        <tr key={row.id || i}>
+                          <td style={{ fontWeight: 700, color: 'var(--gray-400)', textAlign: 'center' }}>{i + 1}</td>
+                          <td>{row.duration || '—'}</td>
+                          {hasSpeed    && <td>{row.speed || '—'}</td>}
+                          <td>{row.intensity || '—'}</td>
+                          <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>
+                          {hasTargetHR && <td>{row.target_hr || '—'}</td>}
+                          {hasEquip    && <td>{row.equipment || '—'}</td>}
+                          {hasIncline  && <td>{row.incline || '—'}</td>}
+                          {hasDesc     && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
 
             {ex.notes && (
               <p style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 10 }}>📝 {ex.notes}</p>

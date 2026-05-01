@@ -146,7 +146,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   }
 
   function addInterval() {
-    set('intervals', [...(form.intervals || []), { id: uid(), intensity: 'moderate', duration: '', rpe: '' }]);
+    set('intervals', [...(form.intervals || []), { id: uid(), intensity: 'moderate', duration: '', rpe: '', target_hr: '', speed: '', equipment: '', incline: '', description: '' }]);
   }
 
   function setInterval(id, k, v) {
@@ -477,80 +477,91 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
             {tab === 'aerobic' && (
               <div className="form-row">
                 <label className="form-label">Intervals</label>
-                <table className="interval-table">
-                  <thead>
-                    <tr>
-                      <th>Intensity</th>
-                      <th>Duration</th>
-                      <th>RPE</th>
-                      <th>Target HR</th>
-                      <th>Description</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(form.intervals || []).map(row => (
-                      <tr key={row.id}>
-                        <td>
-                          <select
-                            value={row.intensity}
-                            onChange={e => setInterval(row.id, 'intensity', e.target.value)}
-                          >
-                            {INTENSITY_OPTIONS.map(o => (
-                              <option key={o} value={o}>
-                                {o}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.duration}
-                            onChange={e => setInterval(row.id, 'duration', e.target.value)}
-                            placeholder="e.g. 2 min"
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            min="0"
-                            max="10"
-                            value={row.rpe}
-                            onChange={e => setInterval(row.id, 'rpe', e.target.value)}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.target_hr || ''}
-                            onChange={e => setInterval(row.id, 'target_hr', e.target.value)}
-                            placeholder="e.g. 120–140"
-                            style={{ width: 90 }}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={row.description || ''}
-                            onChange={e => setInterval(row.id, 'description', e.target.value)}
-                            placeholder="e.g. uphill sprint"
-                            style={{ width: 110 }}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="int-del-btn"
-                            onClick={() => delInterval(row.id)}
-                          >
-                            ✕
-                          </button>
-                        </td>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="interval-table" style={{ minWidth: 780 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: 28 }}>#</th>
+                        <th style={{ width: 80 }}>Duration</th>
+                        <th style={{ width: 90 }}>Speed/Pace</th>
+                        <th style={{ width: 100 }}>Intensity</th>
+                        <th style={{ width: 110 }}>Equipment</th>
+                        <th style={{ width: 100 }}>Incline/Resistance</th>
+                        <th style={{ width: 120 }}>Description</th>
+                        <th style={{ width: 32 }}></th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(form.intervals || []).map((row, idx) => {
+                        const eq = row.equipment || '';
+                        const inclinePlaceholder = eq === 'Treadmill' ? 'e.g. 5%'
+                          : (eq === 'Bike (stationary)' || eq === 'Elliptical') ? 'e.g. level 3'
+                          : 'e.g. steep';
+                        return (
+                          <tr key={row.id}>
+                            <td style={{ fontWeight: 700, color: 'var(--gray-500)', textAlign: 'center', fontSize: 12 }}>{idx + 1}</td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.duration}
+                                onChange={e => setInterval(row.id, 'duration', e.target.value)}
+                                placeholder="e.g. 2 min"
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.speed || ''}
+                                onChange={e => setInterval(row.id, 'speed', e.target.value)}
+                                placeholder="e.g. 8 km/h"
+                              />
+                            </td>
+                            <td>
+                              <select
+                                value={row.intensity || 'moderate'}
+                                onChange={e => setInterval(row.id, 'intensity', e.target.value)}
+                              >
+                                {INTENSITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                value={eq}
+                                onChange={e => setInterval(row.id, 'equipment', e.target.value)}
+                              >
+                                <option value="">—</option>
+                                {['Treadmill', 'Bike (stationary)', 'Elliptical', 'Stairs / StepMill', 'Outdoor', 'Other'].map(o => (
+                                  <option key={o} value={o}>{o}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.incline || ''}
+                                onChange={e => setInterval(row.id, 'incline', e.target.value)}
+                                placeholder={inclinePlaceholder}
+                                disabled={!eq || eq === 'Stairs / StepMill'}
+                                style={{ opacity: (!eq || eq === 'Stairs / StepMill') ? 0.35 : 1 }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.description || ''}
+                                onChange={e => setInterval(row.id, 'description', e.target.value)}
+                                placeholder="e.g. warm up"
+                              />
+                            </td>
+                            <td>
+                              <button type="button" className="int-del-btn" onClick={() => delInterval(row.id)}>✕</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
                 <button type="button" className="add-interval-btn" onClick={addInterval}>
                   + Add interval
                 </button>
