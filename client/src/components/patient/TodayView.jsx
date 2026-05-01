@@ -687,10 +687,26 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                   const intervals = ex.intervals
                     ? (() => { try { return JSON.parse(ex.intervals); } catch { return []; } })()
                     : [];
+                  const aerEquip = ex.aerobic_equipment
+                    ? (() => { try { return JSON.parse(ex.aerobic_equipment); } catch { return null; } })()
+                    : null;
+                  const equipLabels = aerEquip ? [
+                    ...aerEquip.selected,
+                    ...(aerEquip.other ? [`Other: ${aerEquip.other}`] : []),
+                  ] : [];
+
+                  const hasIntens  = intervals.some(r => r.intensity);
+                  const hasDur     = intervals.some(r => r.duration);
+                  const hasRpe     = intervals.some(r => r.rpe != null && r.rpe !== '');
+                  const hasHR      = intervals.some(r => r.target_hr);
+                  const hasEquip   = intervals.some(r => r.equipment);
+                  const hasIncline = intervals.some(r => r.incline);
+                  const hasSpeed   = intervals.some(r => r.speed);
+                  const hasDesc    = intervals.some(r => r.description);
 
                   return (
                     <div key={ex.instance_id} className={`pt-card${done_ ? ' done' : ''}`}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px' }}>
                         <button className="p-ex-icon-btn" onClick={() => setLightbox(ex)}>
                           {ex.img_data || ex.img_url ? (
                             <img src={ex.img_data || ex.img_url} alt={ex.name}
@@ -705,16 +721,32 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontWeight: 700, fontSize: 15 }}>{ex.name}</div>
                           {ex.description && (
-                            <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontSize: 13, color: 'var(--gray-500)', marginTop: 1 }}>
                               {ex.description}
                             </div>
                           )}
-                          <div style={{ display: 'flex', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
-                            {ex.sets && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>💪 {ex.sets}×{ex.reps}</span>}
-                            {ex.weight && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>⚖️ {ex.weight}</span>}
-                            {ex.duration && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>⏱ {ex.duration}</span>}
+                          <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            {ex.duration  && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>⏱ {ex.duration}</span>}
+                            {ex.distance  && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>📍 {ex.distance}</span>}
+                            {ex.speed     && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>💨 {ex.speed}</span>}
                             {ex.equipment && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>🔧 {ex.equipment}</span>}
-                            {ex.rpe != null && ex.rpe !== '' && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>RPE {ex.rpe}</span>}
+                            {ex.rpe != null && ex.rpe !== '' && (
+                              <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>RPE {ex.rpe}</span>
+                            )}
+                            {equipLabels.map(label => (
+                              <span key={label} style={{
+                                fontSize: 11, background: '#f0f9ff', color: '#0369a1',
+                                border: '1px solid #bae6fd', borderRadius: 8,
+                                padding: '1px 7px', fontWeight: 500, whiteSpace: 'nowrap',
+                              }}>{label}</span>
+                            ))}
+                            {aerEquip?.incline && (
+                              <span style={{
+                                fontSize: 11, background: '#fafaf0', color: '#713f12',
+                                border: '1px solid #fde68a', borderRadius: 8,
+                                padding: '1px 7px', fontWeight: 600, whiteSpace: 'nowrap',
+                              }}>⛰ {aerEquip.incline}</span>
+                            )}
                           </div>
                         </div>
 
@@ -724,16 +756,33 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                       </div>
 
                       {intervals.length > 0 && (
-                        <div style={{ padding: '0 16px 14px' }}>
-                          <table className="interval-table">
-                            <thead><tr><th>Intensity</th><th>Duration</th><th>RPE</th><th>Target HR</th></tr></thead>
+                        <div style={{ padding: '0 16px 14px', overflowX: 'auto' }}>
+                          <table className="interval-table" style={{ minWidth: 400 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ width: 24 }}>#</th>
+                                {hasIntens  && <th>Intensity</th>}
+                                {hasDur     && <th>Duration</th>}
+                                {hasRpe     && <th>RPE</th>}
+                                {hasHR      && <th>Heart Rate</th>}
+                                {hasEquip   && <th>Equipment</th>}
+                                {hasIncline && <th>Incline/Res.</th>}
+                                {hasSpeed   && <th>Speed/Pace</th>}
+                                {hasDesc    && <th>Note</th>}
+                              </tr>
+                            </thead>
                             <tbody>
                               {intervals.map((row, i) => (
                                 <tr key={row.id || i}>
-                                  <td>{row.intensity}</td>
-                                  <td>{row.duration}</td>
-                                  <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>
-                                  <td>{row.target_hr || '—'}</td>
+                                  <td style={{ fontWeight: 700, color: 'var(--gray-400)', textAlign: 'center' }}>{i + 1}</td>
+                                  {hasIntens  && <td>{row.intensity || '—'}</td>}
+                                  {hasDur     && <td>{row.duration || '—'}</td>}
+                                  {hasRpe     && <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>}
+                                  {hasHR      && <td>{row.target_hr || '—'}</td>}
+                                  {hasEquip   && <td>{row.equipment || '—'}</td>}
+                                  {hasIncline && <td>{row.incline || '—'}</td>}
+                                  {hasSpeed   && <td>{row.speed || '—'}</td>}
+                                  {hasDesc    && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
                                 </tr>
                               ))}
                             </tbody>
