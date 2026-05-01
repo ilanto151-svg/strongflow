@@ -70,6 +70,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
       : blankFor(tab)
   );
   const [progressive, setProgressive] = useState(initialOverrides.length > 0);
+  const [rpeEnabled, setRpeEnabled] = useState(initial?.rpe != null && initial?.rpe !== '');
   const [imgLoading, setImgLoading] = useState(false);
 
   // Aerobic equipment state (parsed from form.aerobic_equipment JSON)
@@ -521,9 +522,20 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               </div>
             )}
 
-            {tab !== 'aerobic' && (
-              <div className="form-row">
-                <label className="form-label">Target RPE</label>
+            <div className="form-row">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, userSelect: 'none', marginBottom: rpeEnabled ? 8 : 0 }}>
+                <input
+                  type="checkbox"
+                  checked={rpeEnabled}
+                  onChange={e => { setRpeEnabled(e.target.checked); if (!e.target.checked) set('rpe', ''); }}
+                  style={{ width: 15, height: 15, accentColor: '#3b82f6' }}
+                />
+                <span style={{ fontWeight: 600, color: 'var(--gray-700)' }}>Target RPE</span>
+                {tab === 'aerobic' && (
+                  <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>(overall session target)</span>
+                )}
+              </label>
+              {rpeEnabled && (
                 <select
                   className="form-input"
                   value={form.rpe ?? ''}
@@ -531,13 +543,11 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                 >
                   <option value="">—</option>
                   {Object.entries(RPE).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {k} – {v}
-                    </option>
+                    <option key={k} value={k}>{k} – {v}</option>
                   ))}
                 </select>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="form-row">
               <label className="form-label">Notes</label>

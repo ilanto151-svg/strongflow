@@ -217,24 +217,27 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
     setActualSaved(false);
   }
 
-  // Build session_data entry for one resistance exercise (handles both uniform and progressive)
+  // Build session_data entry for any exercise (handles resistance uniform/progressive and aerobic/other)
   function buildExSessionData(ex) {
+    const actual_rpe = getActual(ex.instance_id, 'actual_rpe') || '';
+    const p_rpe = (ex.rpe != null && ex.rpe !== '') ? Number(ex.rpe) : null;
+    const rpeFields = { ...(p_rpe != null && { p_rpe }), ...(actual_rpe && { actual_rpe }) };
+
+    // Aerobic / other — only include if patient logged actual RPE
+    if (ex.type !== 'resistance') {
+      if (!actual_rpe) return null;
+      return { name: ex.name, ...rpeFields };
+    }
+
     const setOvr = ex.set_overrides
       ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
       : [];
     if (setOvr.length > 0) {
       const existingSetData = actualData[`${dayDateStr}_${ex.instance_id}`]?.set_data || [];
-      // Build full set list: planned sets that were kept or modified, plus patient-added extras.
-      // Sets in planned positions that are absent from existingSetData are marked removed.
       const maxPlanned = setOvr.length;
       const totalActual = existingSetData.length;
-
-      // Map planned-index → actual slot position after removals
-      // We walk existingSetData (which is re-indexed after removals) and label each slot
       const set_data = [];
 
-      // First pass: emit entries for all planned positions.
-      // If existingSetData has fewer entries than planned, the missing ones were removed.
       for (let pi = 0; pi < maxPlanned; pi++) {
         if (pi < totalActual && !existingSetData[pi]?.added) {
           set_data.push({
@@ -246,27 +249,26 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
         }
       }
 
-      // Second pass: append patient-added extra sets
       existingSetData.filter(s => s.added).forEach(s => {
         set_data.push({ reps: s.reps || '', weight: s.weight || '', added: true });
       });
 
       const hasAnyData = set_data.some(s => s.removed || s.added || s.reps || s.weight);
-      if (!hasAnyData) return null;
-      return { name: ex.name, set_data, p_set_overrides: setOvr };
+      if (!hasAnyData && !actual_rpe) return null;
+      return { name: ex.name, set_data, p_set_overrides: setOvr, ...rpeFields };
     }
     const sets   = getActual(ex.instance_id, 'sets');
     const reps   = getActual(ex.instance_id, 'reps');
     const weight = getActual(ex.instance_id, 'weight');
-    if (!sets && !reps && !weight) return null;
-    return { name: ex.name, sets, reps, weight, p_sets: ex.sets || '', p_reps: ex.reps || '', p_weight: ex.weight || '' };
+    if (!sets && !reps && !weight && !actual_rpe) return null;
+    return { name: ex.name, sets, reps, weight, p_sets: ex.sets || '', p_reps: ex.reps || '', p_weight: ex.weight || '', ...rpeFields };
   }
 
   async function submitActualData() {
     setSavingActual(true);
     try {
       const sessionData = {};
-      dayExercises.filter(e => e.type === 'resistance').forEach(ex => {
+      dayExercises.forEach(ex => {
         const entry = buildExSessionData(ex);
         if (entry) sessionData[ex.instance_id] = entry;
       });
@@ -301,9 +303,9 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
         })
       );
 
-      // Build session_data: per-exercise actual sets/reps/weight for resistance exercises today
+      // Build session_data: per-exercise actual data for all exercise types
       const sessionData = {};
-      dayExercises.filter(e => e.type === 'resistance').forEach(ex => {
+      dayExercises.forEach(ex => {
         const entry = buildExSessionData(ex);
         if (entry) sessionData[ex.instance_id] = entry;
       });
@@ -522,7 +524,7 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                           <th>Weight ✏️</th>
                           <th>Rest</th>
                           <th>Equipment</th>
-                          <th>RPE</th>
+                          <th>Target RPE</th>
                           <th>Done</th>
                         </tr>
                       </thead>
@@ -657,6 +659,37 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                   <td colSpan={9} style={{ fontSize: 13, color: 'var(--gray-500)' }}>📝 {ex.notes}</td>
                                 </tr>
                               )}
+
+                              {ex.rpe != null && ex.rpe !== '' && (
+                                <tr className="resistance-extra">
+                                  <td></td>
+                                  <td colSpan={9} style={{ paddingTop: 6, paddingBottom: 8 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                      <span style={{
+                                        fontSize: 12, fontWeight: 700, color: '#166534',
+                                        background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                        borderRadius: 8, padding: '2px 10px',
+                                      }}>
+                                        🎯 Target RPE: {ex.rpe} – {RPE[ex.rpe]}
+                                      </span>
+                                      <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>Your RPE:</span>
+                                      <input
+                                        className="actual-input"
+                                        type="number" min="1" max="10"
+                                        value={getActual(ex.instance_id, 'actual_rpe')}
+                                        onChange={e => setActual(ex.instance_id, 'actual_rpe', e.target.value)}
+                                        placeholder="1–10"
+                                        style={{ width: 54 }}
+                                      />
+                                      {getActual(ex.instance_id, 'actual_rpe') && (
+                                        <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>
+                                          {RPE[getActual(ex.instance_id, 'actual_rpe')]}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
                             </Fragment>
                           );
                         })}
@@ -730,9 +763,6 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                             {ex.distance  && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>📍 {ex.distance}</span>}
                             {ex.speed     && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>💨 {ex.speed}</span>}
                             {ex.equipment && <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>🔧 {ex.equipment}</span>}
-                            {ex.rpe != null && ex.rpe !== '' && (
-                              <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>RPE {ex.rpe}</span>
-                            )}
                             {equipLabels.map(label => (
                               <span key={label} style={{
                                 fontSize: 11, background: '#f0f9ff', color: '#0369a1',
@@ -787,6 +817,34 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                      )}
+
+                      {ex.rpe != null && ex.rpe !== '' && (
+                        <div style={{ padding: '0 16px 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                            <span style={{
+                              fontSize: 12, fontWeight: 700, color: '#166534',
+                              background: '#f0fdf4', border: '1px solid #bbf7d0',
+                              borderRadius: 8, padding: '3px 12px',
+                            }}>
+                              🎯 Target RPE: {ex.rpe} – {RPE[ex.rpe]}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--gray-500)' }}>Your RPE:</span>
+                            <input
+                              className="actual-input"
+                              type="number" min="1" max="10"
+                              value={getActual(ex.instance_id, 'actual_rpe')}
+                              onChange={e => setActual(ex.instance_id, 'actual_rpe', e.target.value)}
+                              placeholder="1–10"
+                              style={{ width: 54 }}
+                            />
+                            {getActual(ex.instance_id, 'actual_rpe') && (
+                              <span style={{ fontSize: 12, color: 'var(--gray-600)' }}>
+                                {RPE[getActual(ex.instance_id, 'actual_rpe')]}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
 

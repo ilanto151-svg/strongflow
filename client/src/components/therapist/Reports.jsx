@@ -204,7 +204,6 @@ export default function Reports({ patient }) {
                               const planned = (ex.p_set_overrides || [])[idx];
 
                               if (actual.removed) {
-                                // Set was removed by patient
                                 const plannedStr = planned
                                   ? `${planned.reps || '—'} reps × ${planned.weight || '—'}`
                                   : '';
@@ -222,7 +221,6 @@ export default function Reports({ patient }) {
                               }
 
                               if (actual.added) {
-                                // Extra set added by patient
                                 return (
                                   <div key={idx} style={{
                                     display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
@@ -236,7 +234,6 @@ export default function Reports({ patient }) {
                                 );
                               }
 
-                              // Normal set: planned vs actual
                               const underReps   = planned?.reps   && actual.reps   && Number(actual.reps)   < Number(planned.reps);
                               const underWeight = planned?.weight && actual.weight && Number(actual.weight) < Number(planned.weight);
                               const under = underReps || underWeight;
@@ -268,7 +265,7 @@ export default function Reports({ patient }) {
                               );
                             })}
                           </div>
-                        ) : (
+                        ) : (ex.sets || ex.reps || ex.weight || ex.p_sets || ex.p_reps || ex.p_weight) ? (
                           /* Uniform sets — flat stat boxes */
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                             {[['Sets', ex.p_sets, ex.sets], ['Reps', ex.p_reps, ex.reps], ['Weight', ex.p_weight, ex.weight]].map(([label, prescribed, actual]) => (
@@ -279,7 +276,48 @@ export default function Reports({ patient }) {
                               </div>
                             ))}
                           </div>
-                        )}
+                        ) : null}
+
+                        {/* Per-exercise RPE: planned target vs patient's actual */}
+                        {(ex.p_rpe != null || ex.actual_rpe) && (() => {
+                          const cmp = rpeCompare(ex.p_rpe, ex.actual_rpe);
+                          return (
+                            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--gray-500)', textTransform: 'uppercase', letterSpacing: 0.4 }}>RPE:</span>
+                              {ex.p_rpe != null && (
+                                <span style={{
+                                  fontSize: 12, fontWeight: 700, color: '#166534',
+                                  background: '#f0fdf4', border: '1px solid #bbf7d0',
+                                  borderRadius: 7, padding: '2px 9px',
+                                }}>
+                                  🎯 Target {ex.p_rpe} – {RPE[ex.p_rpe]}
+                                </span>
+                              )}
+                              {ex.p_rpe != null && ex.actual_rpe && (
+                                <span style={{ color: 'var(--gray-300)' }}>→</span>
+                              )}
+                              {ex.actual_rpe && (
+                                <span style={{
+                                  fontSize: 12, fontWeight: 700,
+                                  background: cmp ? cmp.bg : 'var(--gray-100)',
+                                  color: cmp ? cmp.color : 'var(--gray-600)',
+                                  border: `1px solid ${cmp ? cmp.border : 'var(--gray-200)'}`,
+                                  borderRadius: 7, padding: '2px 9px',
+                                }}>
+                                  Actual {ex.actual_rpe} – {RPE[ex.actual_rpe]}
+                                  {cmp && (
+                                    <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 5, background: cmp.color + '18', borderRadius: 4, padding: '0 4px' }}>
+                                      {cmp.badge}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                              {ex.p_rpe != null && !ex.actual_rpe && (
+                                <span style={{ fontSize: 12, color: 'var(--gray-400)', fontStyle: 'italic' }}>No actual RPE logged</span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                   </div>
