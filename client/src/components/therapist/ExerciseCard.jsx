@@ -33,6 +33,13 @@ export default function ExerciseCard({
   const setOverrides = ex.set_overrides
     ? (() => { try { return JSON.parse(ex.set_overrides); } catch { return []; } })()
     : [];
+  const aerEquip = ex.aerobic_equipment
+    ? (() => { try { return JSON.parse(ex.aerobic_equipment); } catch { return null; } })()
+    : null;
+  const equipLabels = aerEquip ? [
+    ...aerEquip.selected,
+    ...(aerEquip.other ? [`Other: ${aerEquip.other}`] : []),
+  ] : [];
 
   return (
     <>
@@ -86,6 +93,24 @@ export default function ExerciseCard({
               </span>
 
               {ex.equipment && <span style={{ marginLeft: 2 }}>{ex.equipment}</span>}
+
+              {/* Aerobic equipment badges */}
+              {equipLabels.map(label => (
+                <span key={label} style={{
+                  background: '#f0f9ff', color: '#0369a1',
+                  border: '1px solid #bae6fd', borderRadius: 8,
+                  padding: '1px 7px', fontWeight: 500, fontSize: 11,
+                  whiteSpace: 'nowrap',
+                }}>{label}</span>
+              ))}
+              {aerEquip?.incline && (
+                <span style={{
+                  background: '#fafaf0', color: '#713f12',
+                  border: '1px solid #fde68a', borderRadius: 8,
+                  padding: '1px 7px', fontWeight: 600, fontSize: 11,
+                  whiteSpace: 'nowrap',
+                }}>⛰ {aerEquip.incline}</span>
+              )}
 
               {/* Progression alert — amber */}
               {noProgression && (

@@ -44,6 +44,7 @@ function parseEx(r) {
     set_overrides: r.set_overrides || null,
     distance: r.distance || '',
     speed: r.speed || '',
+    aerobic_equipment: r.aerobic_equipment || null,
     sort_order: r.sort_order,
   };
 }
@@ -144,11 +145,11 @@ router.post('/:pid', authTherapist, async (req, res, next) => {
       `INSERT INTO exercises (
         id, patient_id, day_key, instance_id, type, name, image, description,
         equipment, sets, reps, duration, body_area, weight, rest, notes,
-        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
+        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed, aerobic_equipment
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
       )`,
       [
         id,
@@ -176,6 +177,7 @@ router.post('/:pid', authTherapist, async (req, res, next) => {
         ord,
         ex.distance || '',
         ex.speed || '',
+        ex.aerobic_equipment || null,
       ]
     );
 
@@ -219,8 +221,9 @@ router.put('/:pid/:iid', authTherapist, async (req, res, next) => {
          intervals = $16,
          set_overrides = $17,
          distance = $18,
-         speed = $19
-       WHERE instance_id = $20 AND patient_id = $21`,
+         speed = $19,
+         aerobic_equipment = $20
+       WHERE instance_id = $21 AND patient_id = $22`,
       [
         ex.name,
         ex.image || '',
@@ -241,6 +244,7 @@ router.put('/:pid/:iid', authTherapist, async (req, res, next) => {
         ex.set_overrides || null,
         ex.distance || '',
         ex.speed || '',
+        ex.aerobic_equipment || null,
         req.params.iid,
         req.params.pid
       ]
@@ -297,11 +301,11 @@ async function insertExercise(pid, dayKey, ex, ord) {
     `INSERT INTO exercises (
       id, patient_id, day_key, instance_id, type, name, image, description,
       equipment, sets, reps, duration, body_area, weight, rest, notes,
-      rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
+      rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed, aerobic_equipment
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8,
       $9, $10, $11, $12, $13, $14, $15, $16,
-      $17, $18, $19, $20, $21, $22, $23, $24, $25
+      $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
     )`,
     [
       'ex_' + crypto.randomUUID().slice(0, 8),
@@ -321,14 +325,15 @@ async function insertExercise(pid, dayKey, ex, ord) {
       ex.rest         || '',
       ex.notes        || '',
       (ex.rpe != null && ex.rpe !== '') ? Number(ex.rpe) : 5,
-      ex.img_data       || null,
-      ex.img_url        || null,
-      ex.link           || null,
-      ex.intervals      || '[]',
-      ex.set_overrides  || null,
+      ex.img_data           || null,
+      ex.img_url            || null,
+      ex.link               || null,
+      ex.intervals          || '[]',
+      ex.set_overrides      || null,
       ord,
-      ex.distance       || '',
-      ex.speed          || '',
+      ex.distance           || '',
+      ex.speed              || '',
+      ex.aerobic_equipment  || null,
     ]
   );
 }
@@ -378,11 +383,11 @@ router.post('/:pid/copy', authTherapist, async (req, res, next) => {
           `INSERT INTO exercises (
             id, patient_id, day_key, instance_id, type, name, image, description,
             equipment, sets, reps, duration, body_area, weight, rest, notes,
-            rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
+            rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed, aerobic_equipment
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8,
             $9, $10, $11, $12, $13, $14, $15, $16,
-            $17, $18, $19, $20, $21, $22, $23, $24, $25
+            $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
           )`,
           [
             newId,
@@ -410,6 +415,7 @@ router.post('/:pid/copy', authTherapist, async (req, res, next) => {
             ord++,
             ex.distance || '',
             ex.speed || '',
+            ex.aerobic_equipment || null,
           ]
         );
       }
@@ -463,11 +469,11 @@ router.post('/:pid/copy-exercise', authTherapist, async (req, res, next) => {
       `INSERT INTO exercises (
         id, patient_id, day_key, instance_id, type, name, image, description,
         equipment, sets, reps, duration, body_area, weight, rest, notes,
-        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
+        rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed, aerobic_equipment
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
       )`,
       [
         newId,
@@ -495,6 +501,7 @@ router.post('/:pid/copy-exercise', authTherapist, async (req, res, next) => {
         ord,
         ex.distance || '',
         ex.speed || '',
+        ex.aerobic_equipment || null,
       ]
     );
 
@@ -538,11 +545,11 @@ router.post('/:pid/copy-day', authTherapist, async (req, res, next) => {
         `INSERT INTO exercises (
           id, patient_id, day_key, instance_id, type, name, image, description,
           equipment, sets, reps, duration, body_area, weight, rest, notes,
-          rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed
+          rpe, img_data, img_url, link, intervals, set_overrides, sort_order, distance, speed, aerobic_equipment
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8,
           $9, $10, $11, $12, $13, $14, $15, $16,
-          $17, $18, $19, $20, $21, $22, $23, $24, $25
+          $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
         )`,
         [
           'ex_' + crypto.randomUUID().slice(0, 8),
@@ -570,6 +577,7 @@ router.post('/:pid/copy-day', authTherapist, async (req, res, next) => {
           ord++,
           ex.distance || '',
           ex.speed || '',
+          ex.aerobic_equipment || null,
         ]
       );
     }

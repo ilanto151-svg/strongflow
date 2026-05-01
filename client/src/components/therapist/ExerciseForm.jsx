@@ -14,8 +14,20 @@ const BLANK_RES = {
   rest: '',
   body_area: ''
 };
-const BLANK_AER = { type: 'aerobic',    name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '', intervals: [] };
-const BLANK_OTH = { type: 'other',      name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '' };
+const BLANK_AER = { type: 'aerobic',    name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '', intervals: [], aerobic_equipment: null };
+const BLANK_OTH = { type: 'other',      name: '', image: '', description: '', equipment: '', duration: '', notes: '', img_data: '', img_url: '', link: '', aerobic_equipment: null };
+
+const AEROBIC_EQUIPMENT_OPTIONS = ['Treadmill', 'Bike (stationary)', 'Elliptical', 'Stairs / StepMill', 'Outdoor'];
+const INCLINE_EQUIPMENT = new Set(['Treadmill', 'Bike (stationary)', 'Elliptical']);
+
+function parseAerobicEquipment(raw) {
+  if (!raw) return { selected: [], other: '', incline: '' };
+  try { return { selected: [], other: '', incline: '', ...JSON.parse(raw) }; } catch { return { selected: [], other: '', incline: '' }; }
+}
+function serializeAerobicEquipment(obj) {
+  if (!obj.selected.length && !obj.other && !obj.incline) return null;
+  return JSON.stringify(obj);
+}
 const BODY_AREAS = [
   'רגליים',
   'חזה',
@@ -60,11 +72,22 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
   const [progressive, setProgressive] = useState(initialOverrides.length > 0);
   const [imgLoading, setImgLoading] = useState(false);
 
+  // Aerobic equipment state (parsed from form.aerobic_equipment JSON)
+  const [aerEquip, setAerEquip] = useState(() => parseAerobicEquipment(initial?.aerobic_equipment));
+
+  function toggleAerEquip(option) {
+    setAerEquip(prev => {
+      const already = prev.selected.includes(option);
+      return { ...prev, selected: already ? prev.selected.filter(x => x !== option) : [...prev.selected, option] };
+    });
+  }
+
   function switchTab(t) {
     setTab(t);
     if (!editing) {
       setForm(blankFor(t));
       setMode('custom');
+      setAerEquip({ selected: [], other: '', incline: '' });
     }
   }
 
@@ -145,6 +168,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
       rpe: (form.rpe !== '' && form.rpe != null) ? form.rpe : null,
       intervals: form.intervals ? JSON.stringify(form.intervals) : '[]',
       set_overrides: overrides.length > 0 ? JSON.stringify(overrides) : null,
+      aerobic_equipment: (tab === 'aerobic' || tab === 'other') ? serializeAerobicEquipment(aerEquip) : null,
     };
     onSave(saved);
   }
@@ -351,6 +375,64 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
               </>
             )}
 
+            {(tab === 'aerobic' || tab === 'other') && (() => {
+              const showIncline = aerEquip.selected.some(s => INCLINE_EQUIPMENT.has(s));
+              const inclineLabel = aerEquip.selected.includes('Treadmill') && !aerEquip.selected.some(s => s === 'Bike (stationary)' || s === 'Elliptical')
+                ? 'Incline (%)'
+                : aerEquip.selected.some(s => s === 'Bike (stationary)' || s === 'Elliptical') && !aerEquip.selected.includes('Treadmill')
+                  ? 'Resistance level'
+                  : 'Incline / Resistance';
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <label className="form-label" style={{ marginBottom: 8, display: 'block' }}>Equipment</label>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+                    {AEROBIC_EQUIPMENT_OPTIONS.map(opt => {
+                      const active = aerEquip.selected.includes(opt);
+                      return (
+                        <button key={opt} type="button"
+                          onClick={() => toggleAerEquip(opt)}
+                          style={{
+                            padding: '4px 12px', fontSize: 12, borderRadius: 20, cursor: 'pointer', border: '1px solid',
+                            background: active ? '#eff6ff' : '#f9fafb',
+                            borderColor: active ? '#3b82f6' : '#d1d5db',
+                            color: active ? '#1d4ed8' : 'var(--gray-600)',
+                            fontWeight: active ? 700 : 400,
+                          }}
+                        >{opt}</button>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                      <input type="checkbox"
+                        checked={aerEquip.selected.includes('Other')}
+                        onChange={() => toggleAerEquip('Other')}
+                        style={{ accentColor: '#3b82f6' }}
+                      />
+                      Other:
+                    </label>
+                    {aerEquip.selected.includes('Other') && (
+                      <input className="form-input" style={{ flex: 1, minWidth: 120, fontSize: 12 }}
+                        value={aerEquip.other}
+                        onChange={e => setAerEquip(p => ({ ...p, other: e.target.value }))}
+                        placeholder="e.g. Rowing machine"
+                      />
+                    )}
+                  </div>
+                  {showIncline && (
+                    <div className="form-row" style={{ marginTop: 10 }}>
+                      <label className="form-label">{inclineLabel}</label>
+                      <input className="form-input" style={{ maxWidth: 160 }}
+                        value={aerEquip.incline}
+                        onChange={e => setAerEquip(p => ({ ...p, incline: e.target.value }))}
+                        placeholder={aerEquip.selected.includes('Treadmill') ? 'e.g. 5%' : 'e.g. level 3'}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             {(tab === 'aerobic' || tab === 'other') && (
               <div className="ex-grid" style={{ marginBottom: 8 }}>
                 <div className="form-row">
@@ -402,6 +484,7 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                       <th>Duration</th>
                       <th>RPE</th>
                       <th>Target HR</th>
+                      <th>Description</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -444,6 +527,15 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                             onChange={e => setInterval(row.id, 'target_hr', e.target.value)}
                             placeholder="e.g. 120–140"
                             style={{ width: 90 }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={row.description || ''}
+                            onChange={e => setInterval(row.id, 'description', e.target.value)}
+                            placeholder="e.g. uphill sprint"
+                            style={{ width: 110 }}
                           />
                         </td>
                         <td>

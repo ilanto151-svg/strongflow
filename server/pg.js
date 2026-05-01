@@ -137,6 +137,11 @@ async function initDB() {
     ADD COLUMN IF NOT EXISTS speed TEXT DEFAULT '';
   `);
 
+  await pool.query(`
+    ALTER TABLE exercises
+    ADD COLUMN IF NOT EXISTS aerobic_equipment TEXT DEFAULT NULL;
+  `);
+
   // day_plans — therapist-authored day-level plan metadata (e.g. planned session RPE)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS day_plans (
