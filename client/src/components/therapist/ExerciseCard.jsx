@@ -295,13 +295,13 @@ export default function ExerciseCard({
                     <thead>
                       <tr>
                         <th style={{ width: 24 }}>#</th>
-                        <th>Duration</th>
-                        {hasSpeed   && <th>Speed</th>}
-                        {hasHR      && <th>Heart Rate</th>}
-                        {hasRpe     && <th>RPE</th>}
                         {hasIntens  && <th>Intensity</th>}
-                        {hasIncline && <th>Incline/Res.</th>}
+                        <th>Duration</th>
+                        {hasRpe     && <th>RPE</th>}
+                        {hasHR      && <th>Heart Rate</th>}
                         {hasEquip   && <th>Equipment</th>}
+                        {hasIncline && <th>Incline/Res.</th>}
+                        {hasSpeed   && <th>Speed</th>}
                         {hasDesc    && <th>Note</th>}
                       </tr>
                     </thead>
@@ -309,13 +309,13 @@ export default function ExerciseCard({
                       {intervals.map((row, i) => (
                         <tr key={row.id || i}>
                           <td style={{ fontWeight: 700, color: 'var(--gray-400)', textAlign: 'center' }}>{i + 1}</td>
-                          <td>{row.duration || '—'}</td>
-                          {hasSpeed   && <td>{row.speed || '—'}</td>}
-                          {hasHR      && <td>{row.target_hr || '—'}</td>}
-                          {hasRpe     && <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>}
                           {hasIntens  && <td>{row.intensity || '—'}</td>}
-                          {hasIncline && <td>{row.incline || '—'}</td>}
+                          <td>{row.duration || '—'}</td>
+                          {hasRpe     && <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>}
+                          {hasHR      && <td>{row.target_hr || '—'}</td>}
                           {hasEquip   && <td>{row.equipment || '—'}</td>}
+                          {hasIncline && <td>{row.incline || '—'}</td>}
+                          {hasSpeed   && <td>{row.speed || '—'}</td>}
                           {hasDesc    && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
                         </tr>
                       ))}

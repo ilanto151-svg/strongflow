@@ -415,13 +415,13 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                     <thead>
                       <tr>
                         <th style={{ width: 28 }}>#</th>
-                        <th style={{ width: 80 }}>Duration</th>
-                        <th style={{ width: 90 }}>Speed/Pace</th>
-                        <th style={{ width: 100 }}>Heart Rate</th>
-                        <th style={{ width: 60 }}>RPE</th>
                         <th style={{ width: 100 }}>Intensity</th>
-                        <th style={{ width: 110 }}>Incline/Resistance</th>
+                        <th style={{ width: 80 }}>Duration</th>
+                        <th style={{ width: 60 }}>RPE</th>
+                        <th style={{ width: 100 }}>Heart Rate</th>
                         <th style={{ width: 120 }}>Equipment</th>
+                        <th style={{ width: 110 }}>Incline/Resistance</th>
+                        <th style={{ width: 90 }}>Speed/Pace</th>
                         <th style={{ width: 120 }}>Description</th>
                         <th style={{ width: 32 }}></th>
                       </tr>
@@ -436,27 +436,20 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                           <tr key={row.id}>
                             <td style={{ fontWeight: 700, color: 'var(--gray-500)', textAlign: 'center', fontSize: 12 }}>{idx + 1}</td>
                             <td>
+                              <select
+                                value={row.intensity || ''}
+                                onChange={e => setInterval(row.id, 'intensity', e.target.value)}
+                              >
+                                <option value="">—</option>
+                                {INTENSITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                            </td>
+                            <td>
                               <input
                                 type="text"
                                 value={row.duration || ''}
                                 onChange={e => setInterval(row.id, 'duration', e.target.value)}
                                 placeholder="e.g. 2 min"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                value={row.speed || ''}
-                                onChange={e => setInterval(row.id, 'speed', e.target.value)}
-                                placeholder="e.g. 8 km/h"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                value={row.target_hr || ''}
-                                onChange={e => setInterval(row.id, 'target_hr', e.target.value)}
-                                placeholder="e.g. 120–140"
                               />
                             </td>
                             <td>
@@ -471,20 +464,11 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                               />
                             </td>
                             <td>
-                              <select
-                                value={row.intensity || ''}
-                                onChange={e => setInterval(row.id, 'intensity', e.target.value)}
-                              >
-                                <option value="">—</option>
-                                {INTENSITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                              </select>
-                            </td>
-                            <td>
                               <input
                                 type="text"
-                                value={row.incline || ''}
-                                onChange={e => setInterval(row.id, 'incline', e.target.value)}
-                                placeholder={inclinePlaceholder}
+                                value={row.target_hr || ''}
+                                onChange={e => setInterval(row.id, 'target_hr', e.target.value)}
+                                placeholder="e.g. 120–140"
                               />
                             </td>
                             <td>
@@ -497,6 +481,22 @@ export default function ExerciseForm({ initial, onSave, onClose }) {
                                   <option key={o} value={o}>{o}</option>
                                 ))}
                               </select>
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.incline || ''}
+                                onChange={e => setInterval(row.id, 'incline', e.target.value)}
+                                placeholder={inclinePlaceholder}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={row.speed || ''}
+                                onChange={e => setInterval(row.id, 'speed', e.target.value)}
+                                placeholder="e.g. 8 km/h"
+                              />
                             </td>
                             <td>
                               <input

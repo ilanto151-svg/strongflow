@@ -286,16 +286,16 @@ function IntervalPatternEditor({ intervals, repeat, onChange, onRepeatChange }) 
           {/* Header */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '22px 1fr 1fr 1fr 1fr 1fr 52px',
+            gridTemplateColumns: '22px 1fr 52px 1fr 1fr 52px',
             gap: 4,
             marginBottom: 4,
             paddingRight: 4,
           }}>
             <div />
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Duration</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Speed/Pace</div>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>RPE</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>HR Zone</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Heart Rate</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Speed/Pace</div>
             <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Description</div>
             <div />
           </div>
@@ -303,7 +303,7 @@ function IntervalPatternEditor({ intervals, repeat, onChange, onRepeatChange }) 
           {intervals.map((iv, idx) => (
             <div key={iv.id} style={{
               display: 'grid',
-              gridTemplateColumns: '22px 1fr 1fr 1fr 1fr 1fr 52px',
+              gridTemplateColumns: '22px 1fr 52px 1fr 1fr 52px',
               gap: 4,
               alignItems: 'center',
               marginBottom: 5,
@@ -313,12 +313,12 @@ function IntervalPatternEditor({ intervals, repeat, onChange, onRepeatChange }) 
 
               <input style={inputSm} value={iv.duration} placeholder="e.g. 2 min"
                 onChange={e => updateInterval(iv.id, 'duration', e.target.value)} />
-              <input style={inputSm} value={iv.speed} placeholder="e.g. 8 km/h"
-                onChange={e => updateInterval(iv.id, 'speed', e.target.value)} />
-              <input style={inputSm} type="number" min="0" max="10" value={iv.rpe} placeholder="0–10"
+              <input style={{ ...inputSm, width: 44 }} type="number" min="1" max="10" value={iv.rpe} placeholder="1-10"
                 onChange={e => updateInterval(iv.id, 'rpe', e.target.value)} />
               <input style={inputSm} value={iv.target_hr} placeholder="e.g. Z2"
                 onChange={e => updateInterval(iv.id, 'target_hr', e.target.value)} />
+              <input style={inputSm} value={iv.speed} placeholder="e.g. 8 km/h"
+                onChange={e => updateInterval(iv.id, 'speed', e.target.value)} />
               <input style={inputSm} value={iv.description} placeholder="e.g. warm up"
                 onChange={e => updateInterval(iv.id, 'description', e.target.value)} />
 
