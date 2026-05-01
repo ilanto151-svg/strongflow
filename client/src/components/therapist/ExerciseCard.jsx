@@ -260,15 +260,24 @@ export default function ExerciseCard({
               <div style={{ marginTop: 12 }}>
                 <table className="interval-table">
                   <thead>
-                    <tr><th>Intensity</th><th>Duration</th><th>RPE</th><th>Target HR</th></tr>
+                    <tr>
+                      <th>Intensity</th>
+                      <th>Duration</th>
+                      <th>RPE</th>
+                      <th>HR Zone</th>
+                      {intervals.some(r => r.speed) && <th>Speed</th>}
+                      {intervals.some(r => r.description) && <th>Note</th>}
+                    </tr>
                   </thead>
                   <tbody>
                     {intervals.map((row, i) => (
                       <tr key={row.id || i}>
-                        <td>{row.intensity}</td>
-                        <td>{row.duration}</td>
+                        <td>{row.intensity || '—'}</td>
+                        <td>{row.duration || '—'}</td>
                         <td>{row.rpe != null && row.rpe !== '' ? `${row.rpe} – ${RPE[row.rpe] || ''}` : '—'}</td>
                         <td>{row.target_hr || '—'}</td>
+                        {intervals.some(r => r.speed) && <td>{row.speed || '—'}</td>}
+                        {intervals.some(r => r.description) && <td style={{ fontStyle: 'italic', color: 'var(--gray-500)' }}>{row.description || ''}</td>}
                       </tr>
                     ))}
                   </tbody>

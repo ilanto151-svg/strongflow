@@ -11,7 +11,6 @@ import { ConfirmModal } from '../shared/Modal';
 import GlobalRulesPanel, {
   loadAutoFilled, saveAutoFilled,
   loadOverridden, saveOverridden,
-  computeAffectedSplit,
 } from './GlobalRulesPanel';
 
 // Describes a reminder's timing in plain English.
