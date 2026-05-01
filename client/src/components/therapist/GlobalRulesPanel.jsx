@@ -6,7 +6,10 @@ const BODY_AREAS = ['רגליים', 'חזה', 'גב', 'כתפיים', 'יד קד
 
 const STR_BLANK = { sets: '', reps: '', weight: '', rest: '' };
 const AER_BLANK = { duration: '', distance: '', speed: '', rest: '' };
-const BLANK_INTERVAL = () => ({ id: uid(), duration: '', speed: '', rpe: '', target_hr: '', description: '' });
+const BLANK_INTERVAL = () => ({ id: uid(), intensity: '', duration: '', rpe: '', target_hr: '', equipment: '', incline: '', speed: '', description: '' });
+
+const INTENSITY_OPTIONS = ['Warm-up', 'Easy', 'Moderate', 'Vigorous', 'Cool-down', 'Recovery', 'Sprint', 'Rest'];
+const EQUIP_OPTIONS     = ['Treadmill', 'Bike (stationary)', 'Elliptical', 'Stairs / StepMill', 'Outdoor', 'Other'];
 
 // ── localStorage helpers ──────────────────────────────────────────────────────
 function rulesKey(pid)      { return `om_rules2_${pid}`; }
@@ -256,20 +259,16 @@ function ConflictModal({ willFill, willConflict, onApplyAll, onKeepExisting, onC
 // ── Interval pattern editor ───────────────────────────────────────────────────
 function IntervalPatternEditor({ intervals, repeat, onChange, onRepeatChange }) {
   function addInterval() { onChange([...intervals, BLANK_INTERVAL()]); }
-
   function removeInterval(id) { onChange(intervals.filter(iv => iv.id !== id)); }
-
   function updateInterval(id, field, val) {
     onChange(intervals.map(iv => iv.id === id ? { ...iv, [field]: val } : iv));
   }
-
   function moveUp(idx) {
     if (idx === 0) return;
     const next = [...intervals];
     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
     onChange(next);
   }
-
   function moveDown(idx) {
     if (idx === intervals.length - 1) return;
     const next = [...intervals];
@@ -277,68 +276,86 @@ function IntervalPatternEditor({ intervals, repeat, onChange, onRepeatChange }) 
     onChange(next);
   }
 
-  const inputSm = { width: '100%', padding: '4px 6px', fontSize: 12, border: '1px solid var(--gray-200)', borderRadius: 6, outline: 'none', background: '#fff' };
-
   return (
     <div>
       {intervals.length > 0 && (
-        <div style={{ marginBottom: 8 }}>
-          {/* Header */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '22px 1fr 52px 1fr 1fr 52px',
-            gap: 4,
-            marginBottom: 4,
-            paddingRight: 4,
-          }}>
-            <div />
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Duration</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>RPE</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Heart Rate</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Speed/Pace</div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: 0.3 }}>Description</div>
-            <div />
-          </div>
-
-          {intervals.map((iv, idx) => (
-            <div key={iv.id} style={{
-              display: 'grid',
-              gridTemplateColumns: '22px 1fr 52px 1fr 1fr 52px',
-              gap: 4,
-              alignItems: 'center',
-              marginBottom: 5,
-            }}>
-              {/* Row number */}
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gray-500)', textAlign: 'center' }}>{idx + 1}</div>
-
-              <input style={inputSm} value={iv.duration} placeholder="e.g. 2 min"
-                onChange={e => updateInterval(iv.id, 'duration', e.target.value)} />
-              <input style={{ ...inputSm, width: 44 }} type="number" min="1" max="10" value={iv.rpe} placeholder="1-10"
-                onChange={e => updateInterval(iv.id, 'rpe', e.target.value)} />
-              <input style={inputSm} value={iv.target_hr} placeholder="e.g. Z2"
-                onChange={e => updateInterval(iv.id, 'target_hr', e.target.value)} />
-              <input style={inputSm} value={iv.speed} placeholder="e.g. 8 km/h"
-                onChange={e => updateInterval(iv.id, 'speed', e.target.value)} />
-              <input style={inputSm} value={iv.description} placeholder="e.g. warm up"
-                onChange={e => updateInterval(iv.id, 'description', e.target.value)} />
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 2 }}>
-                <button title="Move up" onClick={() => moveUp(idx)} disabled={idx === 0}
-                  style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1, fontSize: 11, padding: '2px 4px', color: 'var(--gray-500)' }}>
-                  ↑
-                </button>
-                <button title="Move down" onClick={() => moveDown(idx)} disabled={idx === intervals.length - 1}
-                  style={{ background: 'none', border: 'none', cursor: idx === intervals.length - 1 ? 'default' : 'pointer', opacity: idx === intervals.length - 1 ? 0.3 : 1, fontSize: 11, padding: '2px 4px', color: 'var(--gray-500)' }}>
-                  ↓
-                </button>
-                <button title="Remove interval" onClick={() => removeInterval(iv.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px', color: '#dc2626' }}>
-                  ✕
-                </button>
-              </div>
-            </div>
-          ))}
+        <div style={{ overflowX: 'auto', marginBottom: 8 }}>
+          <table className="interval-table" style={{ minWidth: 860 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 28 }}>#</th>
+                <th style={{ width: 100 }}>Intensity</th>
+                <th style={{ width: 80 }}>Duration</th>
+                <th style={{ width: 60 }}>RPE</th>
+                <th style={{ width: 100 }}>Heart Rate</th>
+                <th style={{ width: 120 }}>Equipment</th>
+                <th style={{ width: 110 }}>Incline/Resistance</th>
+                <th style={{ width: 90 }}>Speed/Pace</th>
+                <th style={{ width: 110 }}>Description</th>
+                <th style={{ width: 52 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {intervals.map((iv, idx) => {
+                const eq = iv.equipment || '';
+                const inclinePlaceholder = eq === 'Treadmill' ? 'e.g. 5%'
+                  : (eq === 'Bike (stationary)' || eq === 'Elliptical') ? 'e.g. level 3'
+                  : 'e.g. steep';
+                return (
+                  <tr key={iv.id}>
+                    <td style={{ fontWeight: 700, color: 'var(--gray-500)', textAlign: 'center', fontSize: 12 }}>{idx + 1}</td>
+                    <td>
+                      <select value={iv.intensity || ''} onChange={e => updateInterval(iv.id, 'intensity', e.target.value)}>
+                        <option value="">—</option>
+                        {INTENSITY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <input type="text" value={iv.duration || ''} placeholder="e.g. 2 min"
+                        onChange={e => updateInterval(iv.id, 'duration', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="number" min="1" max="10" value={iv.rpe || ''} placeholder="1-10"
+                        style={{ width: 54 }}
+                        onChange={e => updateInterval(iv.id, 'rpe', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="text" value={iv.target_hr || ''} placeholder="e.g. 120–140"
+                        onChange={e => updateInterval(iv.id, 'target_hr', e.target.value)} />
+                    </td>
+                    <td>
+                      <select value={eq} onChange={e => updateInterval(iv.id, 'equipment', e.target.value)}>
+                        <option value="">—</option>
+                        {EQUIP_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <input type="text" value={iv.incline || ''} placeholder={inclinePlaceholder}
+                        onChange={e => updateInterval(iv.id, 'incline', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="text" value={iv.speed || ''} placeholder="e.g. 8 km/h"
+                        onChange={e => updateInterval(iv.id, 'speed', e.target.value)} />
+                    </td>
+                    <td>
+                      <input type="text" value={iv.description || ''} placeholder="e.g. warm up"
+                        onChange={e => updateInterval(iv.id, 'description', e.target.value)} />
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
+                        <button title="Move up" onClick={() => moveUp(idx)} disabled={idx === 0}
+                          style={{ background: 'none', border: 'none', cursor: idx === 0 ? 'default' : 'pointer', opacity: idx === 0 ? 0.3 : 1, fontSize: 11, padding: '2px 4px', color: 'var(--gray-500)' }}>↑</button>
+                        <button title="Move down" onClick={() => moveDown(idx)} disabled={idx === intervals.length - 1}
+                          style={{ background: 'none', border: 'none', cursor: idx === intervals.length - 1 ? 'default' : 'pointer', opacity: idx === intervals.length - 1 ? 0.3 : 1, fontSize: 11, padding: '2px 4px', color: 'var(--gray-500)' }}>↓</button>
+                        <button title="Remove" onClick={() => removeInterval(iv.id)}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: '2px 4px', color: '#dc2626' }}>✕</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
