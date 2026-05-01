@@ -21,6 +21,7 @@ export default function ExerciseCard({
   selectMode      = false,
   selected        = false,
   onToggleSelect,
+  rating          = null,  // 'liked' | 'disliked' | null
 }) {
   const [open,       setOpen]       = useState(false);
   const [editing,    setEditing]    = useState(false);
@@ -68,8 +69,16 @@ export default function ExerciseCard({
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-900)' }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--gray-900)', display: 'flex', alignItems: 'center', gap: 6 }}>
               {ex.name}
+              {rating && (
+                <span
+                  title={rating === 'liked' ? 'Patient liked this exercise' : 'Patient disliked this exercise'}
+                  style={{ fontSize: 14, cursor: 'default', lineHeight: 1 }}
+                >
+                  {rating === 'liked' ? '👍' : '👎'}
+                </span>
+              )}
             </div>
 
             {/* Subtitle row: type pill · equipment · alert badges */}

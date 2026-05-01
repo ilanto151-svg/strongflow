@@ -21,6 +21,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/therapist', require('./routes/therapist'));
 app.use('/api/share', require('./routes/share'));
 app.use('/api/treatments', require('./routes/treatments'));
+app.use('/api/ratings',   require('./routes/ratings'));
 
 // events route + optional scheduler function
 const eventsModule = require('./routes/events');

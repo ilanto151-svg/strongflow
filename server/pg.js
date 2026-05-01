@@ -142,16 +142,37 @@ async function initDB() {
     ADD COLUMN IF NOT EXISTS aerobic_equipment TEXT DEFAULT NULL;
   `);
 
+  // patient_exercise_ratings — per-patient per-exercise-name like/dislike history
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS patient_exercise_ratings (
+      patient_id    TEXT NOT NULL,
+      exercise_name TEXT NOT NULL,
+      liked         BOOLEAN NOT NULL,
+      updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (patient_id, exercise_name)
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_exercise_ratings_patient
+    ON patient_exercise_ratings(patient_id);
+  `);
+
   // day_plans — therapist-authored day-level plan metadata (e.g. planned session RPE)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS day_plans (
-      patient_id TEXT NOT NULL,
-      day_key INTEGER NOT NULL,
+      patient_id  TEXT NOT NULL,
+      day_key     INTEGER NOT NULL,
       planned_rpe INTEGER,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      plan_liked  BOOLEAN DEFAULT NULL,
+      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (patient_id, day_key)
     );
+  `);
+
+  await pool.query(`
+    ALTER TABLE day_plans ADD COLUMN IF NOT EXISTS plan_liked BOOLEAN DEFAULT NULL;
   `);
 
   // reports

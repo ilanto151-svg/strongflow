@@ -47,6 +47,7 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
   // Session-local override — populated after each submit so same-session cross-day suggestions stay fresh
   const [sessionPrev, setSessionPrev]   = useState({});
   const [dismissed, setDismissed]       = useState(() => new Set());
+  const [ratings, setRatings]           = useState({ exercises: {}, plans: {} });
 
   // Therapist-defined planned session RPE for the selected day
   const [plannedRpe, setPlannedRpe] = useState(null);
@@ -153,6 +154,14 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
       .then(r => setPlannedRpe(r.data.planned_rpe ?? null))
       .catch(() => setPlannedRpe(null));
   }, [patient.id, dayKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load exercise and plan ratings
+  useEffect(() => {
+    if (!patient) return;
+    api.get(`/ratings/${patient.id}`)
+      .then(r => setRatings(r.data || { exercises: {}, plans: {} }))
+      .catch(() => setRatings({ exercises: {}, plans: {} }));
+  }, [patient.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleDone(instId) {
     const k = `${dayDateStr}_${instId}`;
@@ -401,6 +410,40 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
     setDismissed(prev => new Set([...prev, ...suggestions.map(e => e.instance_id)]));
   }
 
+  // ── Exercise / plan rating helpers ────────────────────────────────────────
+  function getExRating(name) {
+    return ratings.exercises[(name || '').trim().toLowerCase()] || null;
+  }
+
+  function toggleExRating(name, liked) {
+    const norm = (name || '').trim().toLowerCase();
+    const current = ratings.exercises[norm];
+    const newLiked = current === (liked ? 'liked' : 'disliked') ? null : liked;
+    setRatings(prev => ({
+      ...prev,
+      exercises: newLiked === null
+        ? Object.fromEntries(Object.entries(prev.exercises).filter(([k]) => k !== norm))
+        : { ...prev.exercises, [norm]: newLiked ? 'liked' : 'disliked' },
+    }));
+    api.post(`/ratings/${patient.id}/exercise`, { name, liked: newLiked }).catch(console.error);
+  }
+
+  function getPlanRating() {
+    return ratings.plans[String(dayKey)] || null;
+  }
+
+  function togglePlanRating(liked) {
+    const current = ratings.plans[String(dayKey)];
+    const newLiked = current === (liked ? 'liked' : 'disliked') ? null : liked;
+    setRatings(prev => ({
+      ...prev,
+      plans: newLiked === null
+        ? Object.fromEntries(Object.entries(prev.plans).filter(([k]) => k !== String(dayKey)))
+        : { ...prev.plans, [String(dayKey)]: newLiked ? 'liked' : 'disliked' },
+    }));
+    api.post(`/ratings/${patient.id}/plan`, { day_key: dayKey, liked: newLiked }).catch(console.error);
+  }
+
   return (
     <div>
       {/* Patient hero */}
@@ -571,6 +614,23 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                                       </a>
                                     </div>
                                   )}
+                                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                                    {[true, false].map(liked => {
+                                      const active = getExRating(ex.name) === (liked ? 'liked' : 'disliked');
+                                      return (
+                                        <button
+                                          key={liked ? 'up' : 'down'}
+                                          onClick={e => { e.stopPropagation(); toggleExRating(ex.name, liked); }}
+                                          style={{
+                                            background: active ? (liked ? '#dcfce7' : '#fee2e2') : 'var(--gray-100)',
+                                            border: `1px solid ${active ? (liked ? '#86efac' : '#fca5a5') : 'var(--gray-200)'}`,
+                                            borderRadius: 6, padding: '2px 7px', cursor: 'pointer', fontSize: 13,
+                                          }}
+                                          title={liked ? 'Like this exercise' : 'Dislike this exercise'}
+                                        >{liked ? '👍' : '👎'}</button>
+                                      );
+                                    })}
+                                  </div>
                                 </td>
 
                                 <td>{ex.body_area || '-'}</td>
@@ -780,9 +840,28 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                           </div>
                         </div>
 
-                        <button className={`check-btn${done_ ? ' done' : ''}`} onClick={() => toggleDone(ex.instance_id)}>
-                          {done_ ? '✓' : '○'}
-                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          <button className={`check-btn${done_ ? ' done' : ''}`} onClick={() => toggleDone(ex.instance_id)}>
+                            {done_ ? '✓' : '○'}
+                          </button>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {[true, false].map(liked => {
+                              const active = getExRating(ex.name) === (liked ? 'liked' : 'disliked');
+                              return (
+                                <button
+                                  key={liked ? 'up' : 'down'}
+                                  onClick={() => toggleExRating(ex.name, liked)}
+                                  style={{
+                                    background: active ? (liked ? '#dcfce7' : '#fee2e2') : 'var(--gray-100)',
+                                    border: `1px solid ${active ? (liked ? '#86efac' : '#fca5a5') : 'var(--gray-200)'}`,
+                                    borderRadius: 6, padding: '2px 6px', cursor: 'pointer', fontSize: 12,
+                                  }}
+                                  title={liked ? 'Like this exercise' : 'Dislike this exercise'}
+                                >{liked ? '👍' : '👎'}</button>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
 
                       {intervals.length > 0 && (
@@ -938,6 +1017,46 @@ export default function TodayView({ patient, exercises, reports = [], reload }) 
                 <div style={{ fontSize: 13 }}>Session RPE and exercise data saved.</div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Plan rating ───────────────────────────────────────────────────── */}
+      {dayExercises.length > 0 && (
+        <div style={{
+          marginTop: 24,
+          padding: '16px 18px',
+          background: '#fafafa',
+          border: '1px solid var(--gray-200)',
+          borderRadius: 14,
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--gray-700)', marginBottom: 12 }}>
+            Did you like this training plan?
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[true, false].map(liked => {
+              const active = getPlanRating() === (liked ? 'liked' : 'disliked');
+              return (
+                <button
+                  key={liked ? 'up' : 'down'}
+                  onClick={() => togglePlanRating(liked)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    background: active ? (liked ? '#dcfce7' : '#fee2e2') : 'var(--gray-100)',
+                    border: `1px solid ${active ? (liked ? '#86efac' : '#fca5a5') : 'var(--gray-200)'}`,
+                    borderRadius: 10, padding: '8px 18px', cursor: 'pointer',
+                    fontSize: 18, fontWeight: active ? 700 : 400,
+                    transition: 'all .15s',
+                  }}
+                  title={liked ? 'I liked this plan' : 'I did not like this plan'}
+                >
+                  {liked ? '👍' : '👎'}
+                  <span style={{ fontSize: 13, color: active ? (liked ? '#16a34a' : '#dc2626') : 'var(--gray-500)' }}>
+                    {liked ? 'Liked it' : 'Not for me'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}

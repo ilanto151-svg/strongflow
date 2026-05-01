@@ -61,6 +61,21 @@ export default function ExercisePlan({ patient }) {
   const [plannedRpe, setPlannedRpe] = useState(null);
   const [plannedRpeSaving, setPlannedRpeSaving] = useState(false);
 
+  // ── Ratings (patient like/dislike per exercise and per plan day) ─────────
+  const [ratings,     setRatings]     = useState({ exercises: {}, plans: {} });
+  const [ratingAlert, setRatingAlert] = useState(null); // { name, liked, onConfirm }
+
+  useEffect(() => {
+    if (!patient) return;
+    api.get(`/ratings/${patient.id}`)
+      .then(r => setRatings(r.data || { exercises: {}, plans: {} }))
+      .catch(() => setRatings({ exercises: {}, plans: {} }));
+  }, [patient]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function getExRating(name) {
+    return ratings.exercises[(name || '').trim().toLowerCase()] || null;
+  }
+
   // ── Global Rules ──────────────────────────────────────────────────────────
   const [showGlobalRules, setShowGlobalRules] = useState(false);
   const [autoFilledIds,   setAutoFilledIds]   = useState(new Set());
@@ -240,6 +255,40 @@ export default function ExercisePlan({ patient }) {
     await api.post(`/exercises/${patient.id}`, { ...form, day_key: dayKey, instance_id: uid() });
     load();
     setShowAdd(false);
+  }
+
+  // Intercept add — show rating alert if patient previously rated this exercise
+  function handleAddExercise(form) {
+    const rating = getExRating(form.name);
+    if (rating) {
+      setShowAdd(false);
+      setRatingAlert({
+        name: form.name,
+        liked: rating === 'liked',
+        onConfirm: async () => {
+          await api.post(`/exercises/${patient.id}`, { ...form, day_key: dayKey, instance_id: uid() });
+          load();
+          setRatingAlert(null);
+        },
+      });
+    } else {
+      addExercise(form);
+    }
+  }
+
+  // Intercept single-exercise copy — show rating alert if needed
+  function handleCopyExercise(ex) {
+    const rating = getExRating(ex.name);
+    const openModal = () => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id });
+    if (rating) {
+      setRatingAlert({
+        name: ex.name,
+        liked: rating === 'liked',
+        onConfirm: () => { openModal(); setRatingAlert(null); },
+      });
+    } else {
+      openModal();
+    }
   }
 
   async function editExercise(ex, updated) {
@@ -847,8 +896,9 @@ export default function ExercisePlan({ patient }) {
                           onToggleSelect={() => toggleSelect(ex.instance_id)}
                           onEdit={updated => editExercise(ex, updated)}
                           onDelete={() => deleteExercise(ex)}
-                          onCopy={() => setCopyModal({ mode: 'exercise', sourceLabel: ex.name, srcDayKey: dayKey, instanceId: ex.instance_id })}
+                          onCopy={() => handleCopyExercise(ex)}
                           onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
+                          rating={getExRating(ex.name)}
                         />
                       );
                     })}
@@ -911,6 +961,17 @@ export default function ExercisePlan({ patient }) {
               <div style={{ fontSize: 11, color: '#15803d', marginTop: 8 }}>
                 Shown to the patient as the planned overall effort for this session.
               </div>
+              {ratings.plans[String(dayKey)] && (
+                <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--gray-600)' }}>Patient rated this day:</span>
+                  <span style={{ fontSize: 16 }}>
+                    {ratings.plans[String(dayKey)] === 'liked' ? '👍' : '👎'}
+                  </span>
+                  <span style={{ color: ratings.plans[String(dayKey)] === 'liked' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                    {ratings.plans[String(dayKey)] === 'liked' ? 'Liked' : 'Disliked'}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -925,7 +986,7 @@ export default function ExercisePlan({ patient }) {
               <button className="icon-btn" onClick={() => setShowAdd(false)}>✕</button>
             </div>
             <div className="modal-body">
-              <ExerciseForm onSave={addExercise} onClose={() => setShowAdd(false)} />
+              <ExerciseForm onSave={handleAddExercise} onClose={() => setShowAdd(false)} />
             </div>
           </div>
         </div>
@@ -978,6 +1039,49 @@ export default function ExercisePlan({ patient }) {
           onApply={handleApplyRules}
           onClose={() => setShowGlobalRules(false)}
         />
+      )}
+
+      {/* Rating alert — shown when therapist adds/copies an exercise the patient previously rated */}
+      {ratingAlert && (
+        <div className="overlay" onClick={() => setRatingAlert(null)}>
+          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="modal-body" style={{ padding: '28px 24px 20px', textAlign: 'center' }}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>
+                {ratingAlert.liked ? '✅' : '⚠️'}
+              </div>
+              <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>
+                {ratingAlert.liked
+                  ? `${patient.name} previously liked this exercise!`
+                  : `${patient.name} previously disliked this exercise.`}
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--gray-500)', marginBottom: 6 }}>
+                <strong>"{ratingAlert.name}"</strong>
+              </div>
+              {!ratingAlert.liked && (
+                <div style={{ fontSize: 13, color: 'var(--gray-600)', marginBottom: 20 }}>
+                  Are you sure you want to add it?
+                </div>
+              )}
+              {ratingAlert.liked && (
+                <div style={{ height: 20 }} />
+              )}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                <button className="btn btn-ghost" onClick={() => setRatingAlert(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    background: ratingAlert.liked ? '#16a34a' : '#f59e0b',
+                    borderColor: ratingAlert.liked ? '#16a34a' : '#f59e0b',
+                    color: '#fff',
+                  }}
+                  onClick={ratingAlert.onConfirm}
+                >
+                  {ratingAlert.liked ? 'Great, add it' : 'Add anyway'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
