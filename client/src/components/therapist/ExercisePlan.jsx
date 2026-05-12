@@ -169,21 +169,42 @@ export default function ExercisePlan({ patient }) {
     api.get(`/reports/${patient.id}`).then(r => setReports(r.data || [])).catch(() => setReports([]));
   }, [patient]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const dayReport     = useMemo(() => reports.find(r => r.day_key === dayKey), [reports, dayKey]);
-  const sessionData   = useMemo(() => dayReport?.session_data   || {}, [dayReport]);
-  const ackedChanges  = useMemo(() => dayReport?.acked_changes  || {}, [dayReport]);
+  // ── Exercise load ──────────────────────────────────────────────────────────
+  const load = useCallback(() => {
+    if (!patient) return;
+    setLoading(true);
+    api.get(`/exercises/${patient.id}`)
+      .then(r => setExercises(r.data))
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [patient]);
 
-  // Compute diffs for every exercise on the selected day (memoized)
+  useEffect(() => { load(); }, [load]);
+
+  const dayKey      = dateToKey(selectedDay);
+  const dayExercises = exercises.filter(e => e.day_key === dayKey);
+
+  // Instance IDs the patient has submitted exercise data for on the selected day
+  const patientModifiedIds = useMemo(() => {
+    const report = reports.find(r => r.day_key === dayKey);
+    if (!report?.session_data) return new Set();
+    return new Set(Object.keys(report.session_data));
+  }, [reports, dayKey]);
+
+  // ── Patient change diffs (depend on dayExercises, so must follow it) ───────
+  const dayReport    = useMemo(() => reports.find(r => r.day_key === dayKey), [reports, dayKey]);
+  const sessionData  = useMemo(() => dayReport?.session_data  || {}, [dayReport]);
+  const ackedChanges = useMemo(() => dayReport?.acked_changes || {}, [dayReport]);
+
   const exerciseDiffs = useMemo(() => {
     const map = {};
     dayExercises.forEach(ex => {
       const entry = sessionData[ex.instance_id];
       if (entry) map[ex.instance_id] = computeDiffs(ex, entry);
     });
-    return map; // { [instance_id]: diff[] }
+    return map;
   }, [dayExercises, sessionData]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Exercises with at least one diff, with ack state
   const dayChanges = useMemo(() =>
     dayExercises
       .map(ex => ({ ex, diffs: exerciseDiffs[ex.instance_id] || [] }))
@@ -211,28 +232,6 @@ export default function ExercisePlan({ patient }) {
       api.post(`/reports/${patient.id}/ack`, { day_key: dayKey, instance_id: ex.instance_id }).catch(console.error);
     });
   }
-
-  // ── Exercise load ──────────────────────────────────────────────────────────
-  const load = useCallback(() => {
-    if (!patient) return;
-    setLoading(true);
-    api.get(`/exercises/${patient.id}`)
-      .then(r => setExercises(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [patient]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const dayKey      = dateToKey(selectedDay);
-  const dayExercises = exercises.filter(e => e.day_key === dayKey);
-
-  // Instance IDs the patient has submitted exercise data for on the selected day
-  const patientModifiedIds = useMemo(() => {
-    const report = reports.find(r => r.day_key === dayKey);
-    if (!report?.session_data) return new Set();
-    return new Set(Object.keys(report.session_data));
-  }, [reports, dayKey]);
 
   const weekStart = sundayOfWeekOffset(weekOffset);
   const weekDays  = Array.from({ length: 7 }, (_, i) => {
