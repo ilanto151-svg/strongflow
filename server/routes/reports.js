@@ -22,10 +22,11 @@ function parseReport(r) {
     pain: r.pain,
     wellbeing: r.wellbeing,
     notes: r.notes,
-    session_rpe: r.session_rpe ? JSON.parse(r.session_rpe) : {},
-    session_data: r.session_data ? JSON.parse(r.session_data) : {},
-    planned_rpe: r.planned_rpe ?? null,
-    submitted_at: r.created_at || null,
+    session_rpe:    r.session_rpe    ? JSON.parse(r.session_rpe)    : {},
+    session_data:   r.session_data   ? JSON.parse(r.session_data)   : {},
+    acked_changes:  r.acked_changes  ? JSON.parse(r.acked_changes)  : {},
+    planned_rpe:    r.planned_rpe ?? null,
+    submitted_at:   r.created_at || null,
   };
 }
 
@@ -128,6 +129,35 @@ router.post(
     }
 
     res.json({ ok: true });
+  })
+);
+
+// POST /reports/:pid/ack — therapist acknowledges patient changes for one exercise on a day
+router.post(
+  '/:pid/ack',
+  authAny,
+  asyncHandler(async (req, res) => {
+    if (!(await canAccess(req.user, req.params.pid))) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { day_key, instance_id } = req.body;
+    if (!day_key || !instance_id) return res.status(400).json({ error: 'day_key and instance_id required' });
+
+    const { rows } = await pool.query(
+      'SELECT acked_changes FROM reports WHERE patient_id=$1 AND day_key=$2 LIMIT 1',
+      [req.params.pid, day_key]
+    );
+
+    const existing = rows[0]?.acked_changes ? JSON.parse(rows[0].acked_changes) : {};
+    const next = { ...existing, [instance_id]: new Date().toISOString() };
+
+    await pool.query(
+      `UPDATE reports SET acked_changes=$1 WHERE patient_id=$2 AND day_key=$3`,
+      [JSON.stringify(next), req.params.pid, day_key]
+    );
+
+    res.json({ ok: true, acked_changes: next });
   })
 );
 

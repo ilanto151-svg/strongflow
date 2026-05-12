@@ -13,6 +13,59 @@ import GlobalRulesPanel, {
   loadOverridden, saveOverridden,
 } from './GlobalRulesPanel';
 
+// Compute the list of patient modifications for one exercise vs its session_data entry.
+// Returns [] when nothing changed.
+function computeDiffs(ex, entry) {
+  if (!entry) return [];
+  const diffs = [];
+
+  if (ex.type === 'resistance') {
+    const setOvr = (() => { try { return ex.set_overrides ? JSON.parse(ex.set_overrides) : []; } catch { return []; } })();
+
+    if (setOvr.length > 0 && entry.set_data?.length) {
+      entry.set_data.forEach((actual, idx) => {
+        if (actual.removed) {
+          diffs.push({ type: 'removed', icon: '➖', label: `Removed set ${idx + 1}`, id: `set-${idx}-rm` });
+        } else if (actual.added) {
+          const detail = [actual.reps && `${actual.reps} reps`, actual.weight].filter(Boolean).join(' × ');
+          diffs.push({ type: 'added', icon: '➕', label: `Added set ${idx + 1}${detail ? `: ${detail}` : ''}`, id: `set-${idx}-add` });
+        } else {
+          const planned = setOvr[idx];
+          if (planned) {
+            const rDiff = actual.reps   && String(actual.reps)   !== String(planned.reps   || '');
+            const wDiff = actual.weight && String(actual.weight) !== String(planned.weight || '');
+            if (rDiff || wDiff) {
+              const from = [planned.reps && `${planned.reps} reps`, planned.weight].filter(Boolean).join(' × ') || '—';
+              const to   = [actual.reps  && `${actual.reps} reps`,  actual.weight ].filter(Boolean).join(' × ') || '—';
+              diffs.push({ type: 'modified', icon: '✏️', label: `Set ${idx + 1}: ${from} → ${to}`, id: `set-${idx}-mod` });
+            }
+          }
+        }
+      });
+    } else {
+      [['sets', ex.sets, 'Sets'], ['reps', ex.reps, 'Reps'], ['weight', ex.weight, 'Weight']].forEach(([key, planned, label]) => {
+        const actual = entry[key];
+        if (actual && String(actual) !== String(planned || '')) {
+          diffs.push({ type: 'modified', icon: '✏️', label: `${label}: ${planned || '—'} → ${actual}`, id: `field-${key}` });
+        }
+      });
+    }
+  }
+
+  if (entry.actual_rpe) {
+    const planned = ex.rpe;
+    diffs.push({
+      type: 'rpe', icon: '💪',
+      label: planned && String(entry.actual_rpe) !== String(planned)
+        ? `RPE: target ${planned} → actual ${entry.actual_rpe}`
+        : `RPE logged: ${entry.actual_rpe}`,
+      id: 'rpe',
+    });
+  }
+
+  return diffs;
+}
+
 // Describes a reminder's timing in plain English.
 // Uses the fields now guaranteed to exist in reminder objects.
 function triggerDesc(r) {
@@ -109,12 +162,55 @@ export default function ExercisePlan({ patient }) {
     saveOverridden(patient.id, next);
   }
 
-  // ── Reports (for patient-modified badge) ──────────────────────────────────
+  // ── Reports (for patient-modified badge and change diffs) ─────────────────
   const [reports, setReports] = useState([]);
   useEffect(() => {
     if (!patient) return;
     api.get(`/reports/${patient.id}`).then(r => setReports(r.data || [])).catch(() => setReports([]));
   }, [patient]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dayReport     = useMemo(() => reports.find(r => r.day_key === dayKey), [reports, dayKey]);
+  const sessionData   = useMemo(() => dayReport?.session_data   || {}, [dayReport]);
+  const ackedChanges  = useMemo(() => dayReport?.acked_changes  || {}, [dayReport]);
+
+  // Compute diffs for every exercise on the selected day (memoized)
+  const exerciseDiffs = useMemo(() => {
+    const map = {};
+    dayExercises.forEach(ex => {
+      const entry = sessionData[ex.instance_id];
+      if (entry) map[ex.instance_id] = computeDiffs(ex, entry);
+    });
+    return map; // { [instance_id]: diff[] }
+  }, [dayExercises, sessionData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Exercises with at least one diff, with ack state
+  const dayChanges = useMemo(() =>
+    dayExercises
+      .map(ex => ({ ex, diffs: exerciseDiffs[ex.instance_id] || [] }))
+      .filter(({ diffs }) => diffs.length > 0),
+    [dayExercises, exerciseDiffs]
+  );
+  const unackedCount = dayChanges.filter(({ ex }) => !ackedChanges[ex.instance_id]).length;
+
+  async function ackChange(instanceId) {
+    const next = { ...ackedChanges, [instanceId]: new Date().toISOString() };
+    setReports(prev => prev.map(r =>
+      r.day_key === dayKey ? { ...r, acked_changes: next } : r
+    ));
+    api.post(`/reports/${patient.id}/ack`, { day_key: dayKey, instance_id: instanceId }).catch(console.error);
+  }
+
+  function ackAllChanges() {
+    const now = new Date().toISOString();
+    const next = { ...ackedChanges };
+    dayChanges.forEach(({ ex }) => { next[ex.instance_id] = now; });
+    setReports(prev => prev.map(r =>
+      r.day_key === dayKey ? { ...r, acked_changes: next } : r
+    ));
+    dayChanges.forEach(({ ex }) => {
+      api.post(`/reports/${patient.id}/ack`, { day_key: dayKey, instance_id: ex.instance_id }).catch(console.error);
+    });
+  }
 
   // ── Exercise load ──────────────────────────────────────────────────────────
   const load = useCallback(() => {
@@ -334,6 +430,7 @@ export default function ExercisePlan({ patient }) {
   }
 
   // ── Within-patient copy ────────────────────────────────────────────────────
+  const [showChanges, setShowChanges] = useState(true);
   const [copyModal, setCopyModal] = useState(null);
 
   async function doCopy(params) {
@@ -873,6 +970,98 @@ export default function ExercisePlan({ patient }) {
                 </div>
               ) : null}
 
+              {/* ── Patient Changes summary ─────────────────────────────── */}
+              {dayChanges.length > 0 && (
+                <div style={{
+                  marginBottom: 20,
+                  border: `1px solid ${unackedCount > 0 ? '#fdba74' : '#e2e8f0'}`,
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                }}>
+                  {/* Header */}
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      padding: '10px 14px', cursor: 'pointer',
+                      background: unackedCount > 0 ? '#fff7ed' : '#f8fafc',
+                    }}
+                    onClick={() => setShowChanges(s => !s)}
+                  >
+                    <span style={{ fontSize: 15 }}>✏️</span>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: unackedCount > 0 ? '#c2410c' : 'var(--gray-600)', flex: 1 }}>
+                      Patient Changes
+                    </span>
+                    {unackedCount > 0 && (
+                      <span style={{ background: '#f97316', color: '#fff', borderRadius: 9999, padding: '1px 9px', fontSize: 11, fontWeight: 700 }}>
+                        {unackedCount} new
+                      </span>
+                    )}
+                    {unackedCount === 0 && (
+                      <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>✓ All reviewed</span>
+                    )}
+                    {unackedCount > 0 && showChanges && (
+                      <button
+                        style={{ fontSize: 11, color: '#2563eb', background: 'none', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 9px', cursor: 'pointer', marginLeft: 4 }}
+                        onClick={e => { e.stopPropagation(); ackAllChanges(); }}
+                      >
+                        Mark all seen
+                      </button>
+                    )}
+                    <span style={{ fontSize: 11, color: 'var(--gray-400)', marginLeft: 2 }}>{showChanges ? '▲' : '▼'}</span>
+                  </div>
+
+                  {/* Body */}
+                  {showChanges && (
+                    <div style={{ padding: '8px 14px 12px', background: '#fff' }}>
+                      {dayChanges.map(({ ex, diffs }) => {
+                        const acked = !!ackedChanges[ex.instance_id];
+                        return (
+                          <div key={ex.instance_id} style={{
+                            padding: '10px 12px', marginBottom: 8, borderRadius: 10,
+                            background: acked ? '#f8fafc' : '#fff7ed',
+                            border: `1px solid ${acked ? '#e2e8f0' : '#fed7aa'}`,
+                            opacity: acked ? 0.75 : 1,
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: 13, color: acked ? 'var(--gray-500)' : 'var(--gray-900)', marginBottom: 5 }}>
+                                  {acked && <span style={{ color: '#22c55e', marginRight: 5 }}>✓</span>}
+                                  {ex.name}
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                  {diffs.map(d => (
+                                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                                      <span style={{ fontSize: 13 }}>{d.icon}</span>
+                                      <span style={{ color: acked ? 'var(--gray-400)' : (d.type === 'removed' ? '#dc2626' : d.type === 'added' ? '#16a34a' : '#c2410c'), fontWeight: acked ? 400 : 600 }}>
+                                        {d.label}
+                                      </span>
+                                      <span style={{ fontSize: 11, color: 'var(--gray-400)', fontStyle: 'italic' }}>(patient)</span>
+                                    </div>
+                                  ))}
+                                </div>
+                                {dayReport?.submitted_at && (
+                                  <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 5 }}>
+                                    {new Date(dayReport.submitted_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                )}
+                              </div>
+                              {!acked && (
+                                <button
+                                  style={{ fontSize: 11, color: '#2563eb', background: 'none', border: '1px solid #bfdbfe', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}
+                                  onClick={() => ackChange(ex.instance_id)}
+                                >
+                                  Mark seen
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {Object.entries(typedGroups).map(([type, exs]) => {
                 const meta = TYPE_META[type];
                 return (
@@ -899,6 +1088,8 @@ export default function ExercisePlan({ patient }) {
                           onCopy={() => handleCopyExercise(ex)}
                           onCrossPatientCopy={() => setCrossModal({ type: 'exercise', instanceId: ex.instance_id, srcDayKey: dayKey, sourceLabel: ex.name })}
                           rating={getExRating(ex.name)}
+                          diffs={exerciseDiffs[ex.instance_id] || []}
+                          diffsAcked={!!ackedChanges[ex.instance_id]}
                         />
                       );
                     })}

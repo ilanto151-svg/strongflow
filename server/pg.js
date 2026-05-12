@@ -201,6 +201,11 @@ async function initDB() {
     ADD COLUMN IF NOT EXISTS session_data TEXT;
   `);
 
+  await pool.query(`
+    ALTER TABLE reports
+    ADD COLUMN IF NOT EXISTS acked_changes TEXT DEFAULT NULL;
+  `);
+
   // share_pages
   await pool.query(`
     CREATE TABLE IF NOT EXISTS share_pages (

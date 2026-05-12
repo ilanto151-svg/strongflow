@@ -22,6 +22,8 @@ export default function ExerciseCard({
   selected        = false,
   onToggleSelect,
   rating          = null,  // 'liked' | 'disliked' | null
+  diffs           = [],    // change diff objects from computeDiffs
+  diffsAcked      = false, // whether therapist has acknowledged these changes
 }) {
   const [open,       setOpen]       = useState(false);
   const [editing,    setEditing]    = useState(false);
@@ -201,8 +203,8 @@ export default function ExerciseCard({
                 </span>
               )}
 
-              {/* Patient modified badge — orange */}
-              {patientModified && (
+              {/* Patient modified badge — only when no diffs computed (fallback) */}
+              {patientModified && diffs.length === 0 && (
                 <span
                   title="Patient submitted actual sets / reps / weight for this exercise"
                   style={{
@@ -221,6 +223,29 @@ export default function ExerciseCard({
                 </span>
               )}
             </div>
+
+            {/* Patient change pills */}
+            {diffs.length > 0 && (
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 5 }}>
+                {diffs.map(d => (
+                  <span key={d.id} title={d.label} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    background: diffsAcked ? '#f1f5f9' : (d.type === 'removed' ? '#fef2f2' : d.type === 'added' ? '#f0fdf4' : '#fff7ed'),
+                    color:      diffsAcked ? '#94a3b8' : (d.type === 'removed' ? '#dc2626'  : d.type === 'added' ? '#16a34a'  : '#c2410c'),
+                    border: `1px solid ${diffsAcked ? '#e2e8f0' : (d.type === 'removed' ? '#fca5a5' : d.type === 'added' ? '#86efac' : '#fdba74')}`,
+                    borderRadius: 8, padding: '2px 8px',
+                    fontSize: 11, fontWeight: diffsAcked ? 400 : 600,
+                    whiteSpace: 'nowrap', cursor: 'default',
+                  }}>
+                    <span style={{ fontSize: 11 }}>{d.icon}</span>
+                    {d.label}
+                  </span>
+                ))}
+                {diffsAcked && (
+                  <span style={{ fontSize: 10, color: '#94a3b8', alignSelf: 'center' }}>✓ seen</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
